@@ -67,21 +67,33 @@ class Predictor(BasePredictor):
         # 2. Build the command for train_dreambooth.py
         cmd = [
             "python", "dreambooth/train_dreambooth.py",
+            # Matches your old script
             "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
-            f"--instance_data_dir={instance_data_dir}",
-            f"--instance_prompt={instance_prompt}",
+            "--pretrained_vae_name_or_path=stabilityai/sd-vae-ft-mse",
+            "--with_prior_preservation",
+            "--prior_loss_weight=1.0",
+            "--seed=3434554",  # override the old 42
             "--resolution=512",
             "--train_batch_size=1",
+            "--train_text_encoder",
+            "--mixed_precision=fp16",
+            "--use_8bit_adam",
             "--gradient_accumulation_steps=1",
-            "--learning_rate=5e-6",
+            "--learning_rate=1e-6",  # override your old 5e-6
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
+            "--num_class_images=50",
+            "--sample_batch_size=4",
+            # We'll keep your dynamic:
             f"--max_train_steps={steps}",
             f"--output_dir={output_dir}",
-            "--mixed_precision=fp16",
-            "--seed=42",
-            "--center_crop",  #optional, if you want to center crop the instance images to better include faces
-        ]
+            "--save_interval=400",
+            # Provide your concepts_list, if you want to use that approach
+            "--concepts_list=dreambooth/concepts_list.json",
+            # instance data folder, prompt
+            f"--instance_data_dir={instance_data_dir}",
+            f"--instance_prompt={instance_prompt}",
+        ] 
 
         # 2A. Append sample-generation flags if sample_prompt is non-empty
         #     (You can also check for sample_negative_prompt, etc.)
@@ -100,5 +112,3 @@ class Predictor(BasePredictor):
 
         # 4. Return the path to the model directory
         return f"Training complete. Model saved at {output_dir}/"
-
-
