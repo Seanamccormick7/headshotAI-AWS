@@ -1,11 +1,10 @@
-# Use a Python base image
 FROM python:3.9-slim
 
 # Set the working directory
 WORKDIR /workspace
 
 # Copy application files
-COPY ./workspace
+COPY ./workspace /workspace
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
