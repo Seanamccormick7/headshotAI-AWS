@@ -6,3 +6,4 @@ tensorboard
 Jinja2
 safetensors
 xformers
+bitsandbytes
