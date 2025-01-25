@@ -1,0 +1,25 @@
+# cog.yaml
+build:
+  gpu: true # DreamBooth needs a GPU
+  python_version: "3.10" # or "3.9", "3.12", etc.
+  system_packages:
+    - git
+    - libgl1-mesa-glx # often needed for OpenCV if used
+    - libglib2.0-0
+  python_packages:
+    - transformers>=4.25.1
+    - accelerate>=0.14.0
+    - diffusers>=0.14.0
+    - safetensors>=0.3.0
+    - xformers
+    - ftfy
+    - tqdm
+    - Pillow
+    - torch>=2.0
+    - torchvision
+    - opencv-python-headless
+    # plus any others from Shivam’s requirements.txt
+
+# This field tells Cog which Python class to use for predictions.
+# We'll define it in predict.py:Predictor below.
+predict: "predict.py:Predictor"
