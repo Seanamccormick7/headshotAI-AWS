@@ -4,14 +4,19 @@ FROM python:3.9-slim
 # Set the working directory
 WORKDIR /workspace
 
-# Copy the application files
-COPY ./ ./
+# Copy the application files into the container
+COPY . .
 
-# Navigate to the correct directory and install dependencies
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git libgl1-mesa-glx libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
-# Expose port 8080
+# Expose port (optional, depending on your use case)
 EXPOSE 8080
 
-# Set the default command
+# Set the default command to use cog
 CMD ["cog", "predict"]
