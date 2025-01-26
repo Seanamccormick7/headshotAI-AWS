@@ -72,7 +72,7 @@ class Predictor(BasePredictor):
             "--pretrained_vae_name_or_path=stabilityai/sd-vae-ft-mse",
             "--with_prior_preservation",
             "--prior_loss_weight=1.0",
-            "--seed=3434554",  # override the old 42
+            "--seed=42",  # override the old 42
             "--resolution=512",
             "--train_batch_size=1",
             "--train_text_encoder",
@@ -82,7 +82,7 @@ class Predictor(BasePredictor):
             "--learning_rate=1e-6",  # override your old 5e-6
             "--lr_scheduler=constant",
             "--lr_warmup_steps=0",
-            "--num_class_images=50",
+            "--num_class_images=50",  # replace with 50 when working
             "--sample_batch_size=4",
             # We'll keep your dynamic:
             f"--max_train_steps={steps}",
