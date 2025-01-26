@@ -1,15 +1,14 @@
+# Use a Python base image
 FROM python:3.9-slim
 
 # Set the working directory
 WORKDIR /workspace
 
-# Copy application files
-COPY ./workspace /workspace
+# Copy the application files
+COPY ./ ./
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt
+# Navigate to the correct directory and install dependencies
+RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
 # Expose port 8080
 EXPOSE 8080
