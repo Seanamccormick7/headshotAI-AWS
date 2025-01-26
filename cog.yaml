@@ -18,6 +18,7 @@ build:
     - torch>=2.0
     - torchvision
     - opencv-python-headless
+    - bitsandbytes
     # plus any others from Shivam’s requirements.txt
 
 # This field tells Cog which Python class to use for predictions.
