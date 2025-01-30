@@ -13,11 +13,30 @@ COPY . .
 RUN apt-get update && apt-get install -y \
     git \
     libgl1-mesa-glx \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    libglib2.0-0
 
 # Install Cog (for both local usage of `cog predict` and any runtime needs)
-RUN pip install --no-cache-dir cog
+# Install ALL Python dependencies explicitly
+RUN pip install --no-cache-dir \
+    torch>=2.0 \
+    torchvision \
+    transformers>=4.25.1 \
+    diffusers>=0.14.0 \
+    safetensors>=0.3.0 \
+    accelerate>=0.14.0 \
+    xformers \
+    ftfy \
+    tqdm \
+    Pillow \
+    opencv-python-headless \
+    tensorboard \
+    fastapi \
+    uvicorn \
+    requests \
+    pyuploadcare \
+    bitsandbytes \
+    python-multipart \
+    cog
 
 # (Optional) If you have a separate requirements.txt for your dreambooth or main.py
 # Make sure it includes fastapi, uvicorn, pyuploadcare, etc. if you need them.
