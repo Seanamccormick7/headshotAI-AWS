@@ -1,26 +1,34 @@
 # cog.yaml
 build:
-  gpu: true # DreamBooth needs a GPU
-  python_version: "3.10" # or "3.9", "3.12", etc.
+  gpu: true
+  python_version: "3.10"
   system_packages:
     - git
-    - libgl1-mesa-glx # often needed for OpenCV if used
+    - libgl1-mesa-glx  # Required for OpenCV
     - libglib2.0-0
   python_packages:
+    # From requirements.txt (exact versions preserved)
+    - cog
+    - torch>=2.0
+    - torchvision
     - transformers>=4.25.1
-    - accelerate>=0.14.0
     - diffusers>=0.14.0
     - safetensors>=0.3.0
+    - accelerate>=0.14.0
     - xformers
     - ftfy
     - tqdm
     - Pillow
-    - torch>=2.0
-    - torchvision
     - opencv-python-headless
-    - bitsandbytes
-    # plus any others from Shivam’s requirements.txt
+    - tensorboard
 
-# This field tells Cog which Python class to use for predictions.
-# We'll define it in predict.py:Predictor below.
+    # Additional packages required by main.py/predict.py
+    - fastapi         # For web server
+    - uvicorn         # ASGI server
+    - requests        # HTTP client
+    - pyuploadcare    # Uploadcare integration
+    - python-multipart  # For file uploads in FastAPI
+    - bitsandbytes    # For 8-bit Adam
+    - python-dotenv   # For environment variables (if used)
+
 predict: "predict.py:Predictor"
