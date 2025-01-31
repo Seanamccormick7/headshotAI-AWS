@@ -1,21 +1,25 @@
-# torch==2.0.1+cu118  # Match CUDA version with your instance
+# requirements.txt
+
+# Removed torch and torchvision to prevent conflicts
+# torch==2.0.1+cu118
 # torchvision==0.15.2+cu118
+
 accelerate>=0.21.0
 diffusers>=0.19.3
 transformers>=4.31.0
 ftfy
 tqdm
-xformers==0.0.22.post7  # Common compatible version
+xformers==0.0.22.post7
 fastapi>=0.95.0
 uvicorn>=0.21.1
 pyuploadcare>=4.4.0
-python-multipart  # Needed for FastAPI file uploads
+python-multipart
 requests
 pillow>=9.5.0
 safetensors>=0.3.3
 opencv-python-headless
 bitsandbytes>=0.41.1
-scipy  # Needed for some optimizers
-cog-sdk>=0.3.0  # If using Replicate's Cog
-huggingface-hub  # For model downloads
-datasets  # If using any dataset utilities
+scipy
+cog-sdk>=0.3.0
+huggingface-hub
+datasets
