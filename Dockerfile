@@ -9,6 +9,9 @@ WORKDIR /workspace
 # Copy the application files into the container
 COPY . .
 
+# Make a directory for the instance images
+RUN mkdir -p /src/instance_images
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
