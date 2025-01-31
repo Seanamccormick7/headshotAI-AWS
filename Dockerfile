@@ -30,6 +30,9 @@ RUN pip install --no-cache-dir "numpy<2"
 # Install the rest of the Python dependencies from requirements.txt
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
+# **Install the 'cog' Python module from GitHub**
+RUN pip install --no-cache-dir git+https://github.com/replicate/cog.git
+
 # Install Cog separately to ensure it's available for build and runtime
 RUN sh -c "INSTALL_DIR=\"/usr/local/bin\" SUDO=\"\" $(curl -fsSL https://cog.run/install.sh)"
 
