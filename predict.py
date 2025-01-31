@@ -1,10 +1,9 @@
 # predict.py
+
 import subprocess
-import glob
 from pathlib import Path as PlyPath
-import os
-import sys
 from cog import BasePredictor, Input, Path
+import sys
 
 class Predictor(BasePredictor):
     def predict(
@@ -17,13 +16,12 @@ class Predictor(BasePredictor):
         ),
         steps: int = Input(
             description="Number of training steps",
-            default=800
+            default=10  # Adjust as needed
         ),
         output_dir: Path = Input(
             description="Where to save model weights",
             default="trained_model"
         ),
-        # --- New inputs for in-line sample generation ---
         sample_prompt: str = Input(
             description="Prompt used to generate sample images after training. Leave blank to skip sample generation.",
             default=""
@@ -136,4 +134,3 @@ class Predictor(BasePredictor):
 
         # 4. Return the path to the model directory
         return f"Training complete. Model saved at {output_dir}/"
-
