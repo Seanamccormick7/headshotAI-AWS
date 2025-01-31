@@ -6,8 +6,7 @@ import zipfile
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
-# from cog import generate  # only if needed, or from your local script
-from predict import Predictor  # your Cog Predictor class
+from predict import run_training
 import pyuploadcare
 
 # You may have to set your Uploadcare keys in environment or directly here
@@ -64,8 +63,6 @@ def generate_images(req: GenerateRequest):
                 if img_file.endswith(".jpg"):
                     zf.write(os.path.join(instance_dir, img_file), arcname=img_file)
 
-        predictor = Predictor()
-
         # For example, you pass in instance_data, instance_prompt, steps, etc.
         # We'll supply a fake instance_prompt. 
         # In reality, you might build a more descriptive prompt from the user’s attributes.
@@ -73,12 +70,11 @@ def generate_images(req: GenerateRequest):
         training_steps = 10 #increase when real training
 
         # Run the training (this can take up to 2+ hours)
-        train_output = predictor.predict(
-            instance_data = zip_path,
-            instance_prompt = instance_prompt,
-            steps = training_steps,
-            sample_prompt = "high quality professional headshot of sks person", 
-            # ... any other sample config ...
+        train_output = run_training(
+            instance_data=zip_path,
+            instance_prompt=instance_prompt,
+            steps=training_steps,
+            sample_prompt="high quality professional headshot of sks person"
         )
         print("DreamBooth output:", train_output)
 
