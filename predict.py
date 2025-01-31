@@ -32,7 +32,6 @@ class Predictor(BasePredictor):
             default=""
         ),
         n_save_sample: int = Input(
-            description="Number of sample images to save.",
             default=2
         ),
         save_guidance_scale: float = Input(
