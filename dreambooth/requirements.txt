@@ -1,7 +1,7 @@
 # requirements.txt
-accelerate>=0.21.0
-diffusers==0.26.3
-transformers[sentencepiece]>=4.33.0
+accelerate==0.30.1
+diffusers==0.28.2
+transformers==4.38.2
 ftfy
 tqdm
 xformers==0.0.22.post7
@@ -15,6 +15,6 @@ safetensors>=0.4.1
 opencv-python-headless
 bitsandbytes>=0.41.1
 scipy
-huggingface-hub>=0.21.0
+huggingface-hub==0.22.2
 datasets
 tensorboard==2.13.0
