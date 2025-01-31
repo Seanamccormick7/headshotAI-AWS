@@ -30,14 +30,7 @@ RUN pip install --no-cache-dir "numpy<2"
 # Install other Python dependencies from requirements.txt
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
-# Install the correct 'cog' Python module from GitHub
-RUN pip install --no-cache-dir git+https://github.com/replicate/cog.git
-
-# Install Cog CLI tool using the official install script
-RUN sh -c "INSTALL_DIR=\"/usr/local/bin\" SUDO=\"\" $(curl -fsSL https://cog.run/install.sh)"
-
 # Expose port 8080 for Cog's prediction server
 EXPOSE 8080
 
-# Set the default command to serve predictions using Cog
-CMD ["cog", "serve", "-p", "8080"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
