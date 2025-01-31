@@ -20,6 +20,5 @@ safetensors>=0.3.3
 opencv-python-headless
 bitsandbytes>=0.41.1
 scipy
-cog-sdk>=0.3.0
 huggingface-hub
 datasets
