@@ -88,7 +88,7 @@ def generate_images(req: GenerateRequest):
             print("No images found. (check your script output)")
         else:
             from pyuploadcare import File
-            from pyuploadcare.api_resources import Uploadcare
+            from pyuploadcare import Uploadcare
             uploadcare = Uploadcare()
 
             for filename in os.listdir(output_images_dir):
