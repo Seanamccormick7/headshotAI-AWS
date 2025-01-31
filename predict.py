@@ -1,13 +1,14 @@
 # predict.py
-from cog import BasePredictor, Input, Path
+from cog import BasePredictor, Input
 import os
 import subprocess
 import glob
+import shutil
 
 class Predictor(BasePredictor):
     def predict(
         self,
-        instance_data: Path = Input(
+        instance_data: str = Input(
             description="Zip or directory with instance images",
         ),
         instance_prompt: str = Input(
@@ -50,7 +51,7 @@ class Predictor(BasePredictor):
 
         # 1. Unzip or ensure instance_data is accessible
         instance_data_dir = "/src/instance_images"
-        if instance_data.is_dir():
+        if os.path.isdir(instance_data):
             # If the user provided a directory
             instance_data_dir = str(instance_data)
         else:
