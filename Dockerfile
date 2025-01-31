@@ -13,7 +13,8 @@ COPY . .
 RUN apt-get update && apt-get install -y \
     git \
     libgl1-mesa-glx \
-    libglib2.0-0 && \
+    libglib2.0-0 \
+    unzip && \
     rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip
