@@ -6,7 +6,7 @@ import zipfile
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
-from cog import generate  # only if needed, or from your local script
+# from cog import generate  # only if needed, or from your local script
 from predict import Predictor  # your Cog Predictor class
 import pyuploadcare
 
