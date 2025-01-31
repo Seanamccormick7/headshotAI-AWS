@@ -34,7 +34,7 @@ RUN pip install --no-cache-dir "numpy<2"
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
 # Install Cog separately to ensure it's available for build and runtime
-RUN pip install --no-cache-dir cog>=0.3.0 cog
+RUN pip install --no-cache-dir cog>=0.3.0
 
 # Expose port 8080 for your server in case you run a FastAPI app
 EXPOSE 8080
