@@ -15,11 +15,15 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0
 
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Install torch and torchvision first
+RUN pip install --no-cache-dir torch>=2.0 torchvision
+
 # Install Cog (for both local usage of `cog predict` and any runtime needs)
 # Install ALL Python dependencies explicitly
 RUN pip install --no-cache-dir \
-    torch>=2.0 \
-    torchvision \
     transformers>=4.25.1 \
     diffusers>=0.14.0 \
     safetensors>=0.3.0 \
