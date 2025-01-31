@@ -1,9 +1,5 @@
 # requirements.txt
-
-# Removed torch and torchvision to prevent conflicts
-# torch==2.0.1+cu118
-# torchvision==0.15.2+cu118
-
+numpy<2
 accelerate>=0.21.0
 diffusers>=0.19.3
 transformers>=4.31.0
