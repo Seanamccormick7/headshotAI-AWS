@@ -24,6 +24,9 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.2+cu118 \
     --extra-index-url https://download.pytorch.org/whl/cu118
 
+# Force a compatible NumPy version (i.e., <2)
+RUN pip install --no-cache-dir "numpy<2"
+
 # Install the rest of the Python dependencies from requirements.txt
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
