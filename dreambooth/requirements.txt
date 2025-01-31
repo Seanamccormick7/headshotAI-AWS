@@ -1,5 +1,5 @@
-torch==2.0.1+cu118  # Match CUDA version with your instance
-torchvision==0.15.2+cu118
+# torch==2.0.1+cu118  # Match CUDA version with your instance
+# torchvision==0.15.2+cu118
 accelerate>=0.21.0
 diffusers>=0.19.3
 transformers>=4.31.0
