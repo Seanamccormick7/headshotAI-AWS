@@ -22,10 +22,17 @@ def run_training(
     if os.path.isdir(instance_data):
         instance_data_dir = str(instance_data)
     else:
-        os.system(f"unzip -o {instance_data} -d /src/instance_images")
-        for folder in glob.glob("/src/instance_images/*/"):
-            os.system(f"mv {folder}* /src/instance_images/")
-            os.system(f"rm -r {folder}")
+        # Ensure the extraction directory exists
+        os.makedirs(instance_data_dir, exist_ok=True)
+
+        # If the user uploaded a zip, unzip it
+        subprocess.run(["unzip", "-o", instance_data, "-d", instance_data_dir], check=True)
+
+        # Flatten subfolders
+        for folder in glob.glob(os.path.join(instance_data_dir, "*/")):
+            subprocess.run(["mv", f"{folder}*", instance_data_dir], check=True)
+            subprocess.run(["rm", "-r", folder], check=True)
+
         instance_data_dir = "/src/instance_images"
 
     # Build command (same as before)
