@@ -13,39 +13,21 @@ COPY . .
 RUN apt-get update && apt-get install -y \
     git \
     libgl1-mesa-glx \
-    libglib2.0-0
+    libglib2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip
 RUN pip install --upgrade pip
 
-# Install torch and torchvision first
-RUN pip install --no-cache-dir torch>=2.0 torchvision
+# Install torch and torchvision with CUDA 11.8 support
+RUN pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.2+cu118 \
+    --extra-index-url https://download.pytorch.org/whl/cu118
 
-# Install Cog (for both local usage of `cog predict` and any runtime needs)
-# Install ALL Python dependencies explicitly
-RUN pip install --no-cache-dir \
-    transformers>=4.25.1 \
-    diffusers>=0.14.0 \
-    safetensors>=0.3.0 \
-    accelerate>=0.14.0 \
-    xformers \
-    ftfy \
-    tqdm \
-    Pillow \
-    opencv-python-headless \
-    tensorboard \
-    fastapi \
-    uvicorn \
-    requests \
-    pyuploadcare \
-    bitsandbytes \
-    python-multipart \
-    cog
-
-# (Optional) If you have a separate requirements.txt for your dreambooth or main.py
-# Make sure it includes fastapi, uvicorn, pyuploadcare, etc. if you need them.
-# For example:
+# Install the rest of the Python dependencies from requirements.txt
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
+
+# Install Cog separately to ensure it's available for build and runtime
+RUN pip install --no-cache-dir cog-sdk>=0.3.0 cog
 
 # Expose port 8080 for your server in case you run a FastAPI app
 EXPOSE 8080
