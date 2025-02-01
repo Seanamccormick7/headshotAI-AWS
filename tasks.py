@@ -1,4 +1,4 @@
-# tasks.py
+# tasks.py (within generate_images_task)
 import os
 import tempfile
 import zipfile
@@ -11,7 +11,7 @@ import pyuploadcare
 from celery_app import celery_app
 from predict import run_training
 
-# Configure Uploadcare keys
+# Configure Uploadcare keys (ensure these environment variables are set)
 pyuploadcare.conf.api_secret = os.environ.get("UPLOADCARE_SECRET_KEY", "secret")
 pyuploadcare.conf.api_public = os.environ.get("UPLOADCARE_PUBLIC_KEY", "public")
 
@@ -22,7 +22,6 @@ def generate_images_task(self, req_data: dict):
     Downloads user images, runs training, uploads the generated images,
     calls back to Next.js, and then cleans up temporary data.
     """
-    # For cleanup tracking:
     instance_dir = None
     output_dir = None
     try:
@@ -49,25 +48,51 @@ def generate_images_task(self, req_data: dict):
                 if img_file.endswith(".jpg"):
                     zf.write(os.path.join(instance_dir, img_file), arcname=img_file)
 
-        # 3) Create a temporary output directory for the training results.
-        output_dir = tempfile.mkdtemp(prefix="trained_model_")
-        # Use a small number of steps for testing (adjust as needed)
-        instance_prompt = "photo of sks person"
+        # 3) Build a dynamic prompt based on frontend variables.
+        gender = req_data.get("gender", "person")
+        age = req_data.get("age", None)
+        age_str = f"{age}-year-old " if age is not None else ""
+        hairColor = req_data.get("hairColor", "unknown hair color")
+        hairLength = req_data.get("hairLength", "unknown length")
+        ethnicity = req_data.get("ethnicity", "")
+        bodyType = req_data.get("bodyType", "")
+        attire = req_data.get("attire", "")
+        backgrounds = req_data.get("backgrounds", "")
+        glasses = req_data.get("glasses", False)
+        glasses_str = "wearing glasses" if glasses else "no glasses"
+
+        # Build a descriptive prompt string.
+        instance_prompt = (
+            f"Photo of a {age_str}{gender} with {hairColor} hair "
+            f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
+        )
+        
+        # Optionally, you can also build a sample prompt similarly if needed:
+        sample_prompt = (
+            f"High quality professional headshot of a {age_str}{gender} with {hairColor} hair "
+            f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str},"
+            f"wearing {attire}, in a {backgrounds} setting. "
+        )
+        
+        # 4) Set the training steps (for testing, we use 10 steps)
         training_steps = 10
 
-        # Run DreamBooth training. Note: run_training is updated to accept output_dir.
+        # 5) Create a temporary output directory for the training results.
+        output_dir = tempfile.mkdtemp(prefix="trained_model_")
+
+        # Run DreamBooth training using the dynamic prompt
         train_output = run_training(
             instance_data=zip_path,
             instance_prompt=instance_prompt,
             steps=training_steps,
             output_dir=output_dir,
-            sample_prompt="high quality professional headshot of sks person"
+            sample_prompt=sample_prompt
         )
         print("DreamBooth training output:", train_output)
 
-        # 4) Upload generated images to Uploadcare.
+        # 6) Upload generated images to Uploadcare.
         generated_uuids = []
-        # Assume training writes images into a subfolder like "<output_dir>/10/samples"
+        # Adjust the samples directory if your training script saves images elsewhere.
         samples_dir = os.path.join(output_dir, "10", "samples")
         if not os.path.isdir(samples_dir):
             print("No images found in", samples_dir)
@@ -81,7 +106,7 @@ def generate_images_task(self, req_data: dict):
                         file_uploaded = uploadcare.upload(file_obj)
                     generated_uuids.append(str(file_uploaded.uuid))
 
-        # 5) Callback to Next.js with the generated image UUIDs.
+        # 7) Callback to Next.js with the generated image UUIDs.
         callback_payload = {
             "userId": userId,
             "generatedUuids": generated_uuids,
