@@ -24,18 +24,12 @@ def run_training(
     else:
         # Ensure the extraction directory exists
         os.makedirs(instance_data_dir, exist_ok=True)
-
-        # If the user uploaded a zip, unzip it
         subprocess.run(["unzip", "-o", instance_data, "-d", instance_data_dir], check=True)
-
-        # Flatten subfolders
         for folder in glob.glob(os.path.join(instance_data_dir, "*/")):
             subprocess.run(["mv", f"{folder}*", instance_data_dir], check=True)
             subprocess.run(["rm", "-r", folder], check=True)
-
         instance_data_dir = "/src/instance_images"
 
-    # Build command (same as before)
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
         "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",

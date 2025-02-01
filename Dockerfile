@@ -27,10 +27,11 @@ RUN pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.2+cu118 \
 # Install a compatible version of NumPy
 RUN pip install --no-cache-dir "numpy<2"
 
-# Install other Python dependencies from requirements.txt
+# Install other Python dependencies (including Celery and Redis)
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
-# Expose port 8080 for Cog's prediction server
+# Expose port 8080 for uvicorn
 EXPOSE 8080
 
+# By default, run the FastAPI web server. (For Celery, run a separate command.)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

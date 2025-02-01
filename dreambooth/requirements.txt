@@ -18,3 +18,5 @@ scipy
 huggingface-hub==0.22.2
 datasets
 tensorboard==2.13.0
+celery>=5.2.7
+redis>=4.3.4
