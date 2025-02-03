@@ -13,7 +13,7 @@ def run_training(
     sample_negative_prompt: str = "",
     n_save_sample: int = 2,
     save_guidance_scale: float = 7.5,
-    save_infer_steps: int = 20
+    save_infer_steps: int = 50
 ) -> str:
     """Main training function without Cog dependencies"""
     
