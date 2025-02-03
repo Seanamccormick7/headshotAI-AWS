@@ -10,7 +10,7 @@ def run_training(
     steps: int = 800,
     output_dir: str = "trained_model",
     sample_prompt: str = "",
-    sample_negative_prompt: str = "",
+    sample_negative_prompt="ugly, tiling, out of frame, long neck, blurred, ... ",
     n_save_sample: int = 2,
     save_guidance_scale: float = 7.5,
     save_infer_steps: int = 50
