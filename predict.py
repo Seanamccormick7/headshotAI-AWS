@@ -32,7 +32,7 @@ def run_training(
 
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
-        "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
+        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-large-turbo",
         "--pretrained_vae_name_or_path=stabilityai/sd-vae-ft-mse",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
