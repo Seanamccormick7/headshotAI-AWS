@@ -1,10 +1,20 @@
 # requirements.txt
 
-accelerate==0.30.1
-# Using a newer version of diffusers to support StableDiffusion3Pipeline
-diffusers>=0.30.0
+# Force the same Torch/TorchVision that we installed manually
+torch==2.0.1+cu118
+torchvision==0.15.2+cu118
 
-transformers==4.38.2
+# Keep accelerate pinned
+accelerate==0.30.1
+
+# For stable-diffusion-3.5 support, need a newer diffusers
+diffusers==0.32.2
+
+# Transformers must be >=4.31 to have BaseImageProcessor
+# Often recommended to use >=4.46.0 for SD3.5 pipeline
+transformers>=4.46.0
+
+# The rest as before
 ftfy
 tqdm
 xformers==0.0.22.post7
@@ -18,6 +28,7 @@ safetensors>=0.4.1
 opencv-python-headless
 bitsandbytes>=0.41.1
 scipy
+huggingface-hub==0.22.2
 datasets
 tensorboard==2.13.0
 celery>=5.2.7
