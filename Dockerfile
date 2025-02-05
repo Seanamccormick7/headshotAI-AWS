@@ -19,10 +19,14 @@ RUN python -m pip install --no-cache-dir torch==2.2.0+cu121 torchvision==0.17.0+
     --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Install bitsandbytes for CUDA 12.x
-RUN python -m pip install https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/0.41.3/bitsandbytes-0.41.3-py3-none-any.whl
+RUN python -m pip install https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/0.42.0/bitsandbytes-0.42.0-py3-none-any.whl
 
 # Install xformers
 RUN pip install -U xformers --index-url https://download.pytorch.org/whl/cu121
+
+# debugging checks
+RUN python -c "import torch; print(f'PyTorch CUDA: {torch.version.cuda}')" && \
+    nvidia-smi
 
 # Install remaining requirements
 RUN python -m pip install --no-cache-dir "numpy<2"
