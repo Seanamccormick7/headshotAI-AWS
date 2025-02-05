@@ -30,10 +30,10 @@ def run_training(
             subprocess.run(["rm", "-r", folder], check=True)
         instance_data_dir = "/src/instance_images"
 
+    # NOTE: Using the new model ID for training.
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
-        "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
-        "--pretrained_vae_name_or_path=stabilityai/sd-vae-ft-mse",
+        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-large",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
         "--seed=42",
@@ -68,3 +68,5 @@ def run_training(
 
     subprocess.run(cmd, check=True)
     return f"Training complete. Model saved at {output_dir}/"
+
+

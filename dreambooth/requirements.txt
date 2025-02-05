@@ -1,6 +1,9 @@
 # requirements.txt
+
 accelerate==0.30.1
-diffusers==0.28.2
+# Using a newer version of diffusers to support StableDiffusion3Pipeline
+diffusers>=0.30.0
+
 transformers==4.38.2
 ftfy
 tqdm
