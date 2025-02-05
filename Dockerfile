@@ -1,7 +1,7 @@
 # Dockerfile
 
 # Use Python 3.10 slim as the base image
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+FROM python:3.10-slim
 
 # Set the working directory
 WORKDIR /workspace
@@ -10,11 +10,16 @@ WORKDIR /workspace
 COPY . .
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libgl1-mesa-glx \
     libglib2.0-0 \
     unzip && \
+    # Here are the CUDA 11.8 runtime libs you need for bitsandbytes:
+    libcublas11 \
+    libcusparse-11-8 \
+    libcurand-11-8 \
+    libcudnn8 \
     rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip to the latest version
