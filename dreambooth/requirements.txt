@@ -16,8 +16,8 @@ transformers>=4.46.0
 # The rest as before
 ftfy
 tqdm
-# Use xformers 0.0.20 instead of 0.0.22 to avoid Torch 2.1 requirement
-xformers==0.0.20
+# Use xformers 0.0.22 for Torch 2.1 requirement
+xformers==0.0.22
 
 fastapi>=0.95.0
 uvicorn>=0.21.1
