@@ -1,39 +1,32 @@
 # Dockerfile
 
-# Use an official NVIDIA CUDA 11.8 runtime base (Ubuntu 22.04)
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
 
-# Install Python, git, and additional build dependencies (including python3-dev)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-dev git libgl1-mesa-glx libglib2.0-0 unzip \
     build-essential ninja-build \
  && rm -rf /var/lib/apt/lists/*
 
-# If you want python -> python3 symlink
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
 WORKDIR /workspace
 COPY . .
 
-# Upgrade pip
 RUN python -m pip install --upgrade pip
 
-# Install PyTorch and Triton
-RUN python -m pip install --no-cache-dir torch==2.1.0+cu118 torchvision==0.16.0+cu118 \
-    --extra-index-url https://download.pytorch.org/whl/cu118 && \
-    python -m pip install --no-cache-dir triton==2.1.0
+# Install CUDA 12.1-compatible PyTorch
+RUN python -m pip install --no-cache-dir torch==2.2.0+cu121 torchvision==0.17.0+cu121 \
+    --extra-index-url https://download.pytorch.org/whl/cu121
 
-# Force NumPy <2
+# Install bitsandbytes for CUDA 12.x
+RUN python -m pip install https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/0.41.3/bitsandbytes-0.41.3-py3-none-any.whl
+
+# Install xformers
+RUN pip install -U xformers --index-url https://download.pytorch.org/whl/cu121
+
+# Install remaining requirements
 RUN python -m pip install --no-cache-dir "numpy<2"
-
-# Install the rest of your Python deps
 RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
-
-#forcing triton to be installed with 2.1.0
-RUN python -m pip install --no-cache-dir triton==2.1.0
-
-# Force a rebuild of xformers from source to match our CUDA 11.8/PyTorch 2.1.0+cu118 environment
-RUN pip uninstall -y xformers && pip install --no-binary :all: xformers
 
 EXPOSE 8080
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
