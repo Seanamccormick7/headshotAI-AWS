@@ -429,7 +429,12 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 
 def main(args):
+
     logging_dir = Path(args.output_dir, "0", args.logging_dir)
+
+    huggingface_token = os.environ.get("HF_TOKEN")
+    if huggingface_token is None:
+        logger.warning("No HF_TOKEN found in environment. Gated models may fail (401).")
 
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -487,6 +492,7 @@ def main(args):
                         torch_dtype=torch_dtype,
                         safety_checker=None,
                         revision=args.revision,
+                        use_auth_token=huggingface_token
                     )
                     pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
                     if is_xformers_available():
@@ -528,6 +534,7 @@ def main(args):
             args.pretrained_model_name_or_path,
             subfolder="tokenizer",  # the new model also has tokenizer_2/3, but we keep main one
             revision=args.revision,
+            use_auth_token=huggingface_token,
         )
 
     # text encoder
@@ -535,6 +542,7 @@ def main(args):
         args.pretrained_model_name_or_path,
         subfolder="text_encoder",  # again, there's text_encoder_2, text_encoder_3 for the full model
         revision=args.revision,
+        use_auth_token=huggingface_token,
     )
 
     # vae
@@ -542,6 +550,7 @@ def main(args):
         args.pretrained_model_name_or_path,
         subfolder="vae",
         revision=args.revision,
+        use_auth_token=huggingface_token,
     )
 
     # main "transformer" model (replaces unet in the older pipeline)
@@ -549,7 +558,8 @@ def main(args):
         args.pretrained_model_name_or_path,
         subfolder="transformer",
         revision=args.revision,
-        torch_dtype=torch.float32
+        torch_dtype=torch.float32,
+        use_auth_token=huggingface_token,
     )
 
     vae.requires_grad_(False)
@@ -757,10 +767,12 @@ def main(args):
                     args.pretrained_model_name_or_path,
                     subfolder="vae",
                     revision=args.revision,
+                    use_auth_token=huggingface_token,
                 ),
                 safety_checker=None,
                 torch_dtype=torch.float16,
                 revision=args.revision,
+                use_auth_token=huggingface_token,
             )
             pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
             if is_xformers_available():
