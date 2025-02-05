@@ -31,5 +31,8 @@ RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
 #forcing triton to be installed with 2.1.0
 RUN python -m pip install --no-cache-dir triton==2.1.0
 
+# Force a rebuild of xformers from source to match our CUDA 11.8/PyTorch 2.1.0+cu118 environment
+RUN pip uninstall -y xformers && pip install --no-binary :all: xformers
+
 EXPOSE 8080
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
