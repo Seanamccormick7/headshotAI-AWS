@@ -28,7 +28,6 @@ safetensors>=0.4.1
 opencv-python-headless
 bitsandbytes>=0.41.1
 scipy
-huggingface-hub==0.22.2
 datasets
 tensorboard==2.13.0
 celery>=5.2.7
