@@ -1,7 +1,7 @@
 # Dockerfile
 
 # Use Python 3.10 slim as the base image
-FROM python:3.10-slim
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
 
 # Set the working directory
 WORKDIR /workspace
