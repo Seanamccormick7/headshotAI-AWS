@@ -1,7 +1,7 @@
 # Dockerfile
 
 # Use an official NVIDIA CUDA 11.8 runtime base (Ubuntu 22.04)
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
 
 # Ensure Python 3 + pip are installed
 RUN apt-get update && apt-get install -y --no-install-recommends \
