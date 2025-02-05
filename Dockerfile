@@ -1,42 +1,31 @@
 # Dockerfile
 
-# Use Python 3.10 slim as the base image
-FROM python:3.10-slim
+# Use an official NVIDIA CUDA 11.8 runtime base (Ubuntu 22.04)
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
 
-# Set the working directory
+# Ensure Python 3 + pip are installed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip git libgl1-mesa-glx libglib2.0-0 unzip \
+ && rm -rf /var/lib/apt/lists/*
+
+# If you want python -> python3 symlink
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 WORKDIR /workspace
-
-# Copy all application files into the container
 COPY . .
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    unzip && \
-    # Here are the CUDA 11.8 runtime libs you need for bitsandbytes:
-    libcublas11 \
-    libcusparse-11-8 \
-    libcurand-11-8 \
-    libcudnn8 \
-    rm -rf /var/lib/apt/lists/*
+# Upgrade pip
+RUN python -m pip install --upgrade pip
 
-# Upgrade pip to the latest version
-RUN pip install --upgrade pip
-
-# Install torch and torchvision with CUDA 11.8 support
-RUN pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.2+cu118 \
+# Install your pinned torch/torchvision (both cu118)
+RUN python -m pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.2+cu118 \
     --extra-index-url https://download.pytorch.org/whl/cu118
 
-# Install a compatible version of NumPy
-RUN pip install --no-cache-dir "numpy<2"
+# Force NumPy <2
+RUN python -m pip install --no-cache-dir "numpy<2"
 
-# Install other Python dependencies (including Celery and Redis)
-RUN pip install --no-cache-dir -r dreambooth/requirements.txt
+# Install the rest of your Python deps
+RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
 
-# Expose port 8080 for uvicorn
 EXPOSE 8080
-
-# By default, run the FastAPI web server. (For Celery, run a separate command.)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
