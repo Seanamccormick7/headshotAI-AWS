@@ -6,6 +6,7 @@ FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
 # Ensure Python 3 + pip are installed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip git libgl1-mesa-glx libglib2.0-0 unzip \
+    build-essential ninja-build \
  && rm -rf /var/lib/apt/lists/*
 
 # If you want python -> python3 symlink
