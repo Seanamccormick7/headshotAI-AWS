@@ -28,5 +28,8 @@ RUN python -m pip install --no-cache-dir "numpy<2"
 # Install the rest of your Python deps
 RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
 
+#forcing triton to be installed with 2.1.0
+RUN python -m pip install --no-cache-dir triton==2.1.0
+
 EXPOSE 8080
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
