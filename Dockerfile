@@ -18,7 +18,7 @@ COPY . .
 RUN python -m pip install --upgrade pip
 
 # Install PyTorch and Triton
-RUN python -m pip install --no-cache-dir torch==2.0.1+cu118 torchvision==0.15.2+cu118 \
+RUN python -m pip install --no-cache-dir torch==2.1.0+cu118 torchvision==0.16.0+cu118 \
     --extra-index-url https://download.pytorch.org/whl/cu118 && \
     python -m pip install --no-cache-dir triton==2.1.0
 
