@@ -14,15 +14,14 @@ COPY . .
 
 RUN python -m pip install --upgrade pip
 
-# Install CUDA 12.1-compatible PyTorch
-RUN python -m pip install --no-cache-dir torch==2.2.0+cu121 torchvision==0.16.0+cu121 \
-    --extra-index-url https://download.pytorch.org/whl/cu121
+# Install PyTorch and torchvision with matching CUDA version
+RUN pip3 install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
 
 # Install bitsandbytes for CUDA 12.x
-RUN python -m pip install https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/0.42.0/bitsandbytes-0.42.0-py3-none-any.whl
+RUN python -m pip install bitsandbytes==0.41.1
 
-# Install xformers
-RUN pip install -U xformers --index-url https://download.pytorch.org/whl/cu121
+# Install xformers with matching CUDA support
+RUN pip install -U xformers==0.0.22.post7
 
 # Install remaining requirements
 RUN python -m pip install --no-cache-dir "numpy<2"
