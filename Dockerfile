@@ -23,6 +23,9 @@ RUN python -m pip install bitsandbytes==0.41.1
 # Install xformers with matching CUDA support
 RUN pip install -U xformers==0.0.22.post7
 
+# Install hf_transfer for faster downloads
+RUN pip install hf_transfer
+
 # Install remaining requirements
 RUN python -m pip install --no-cache-dir "numpy<2"
 RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
