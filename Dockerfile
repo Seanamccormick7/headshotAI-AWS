@@ -15,7 +15,7 @@ COPY . .
 RUN python -m pip install --upgrade pip
 
 # Install CUDA 12.1-compatible PyTorch
-RUN python -m pip install --no-cache-dir torch==2.2.0+cu121 torchvision==0.17.0+cu121 \
+RUN python -m pip install --no-cache-dir torch==2.2.0+cu121 torchvision==0.16.0+cu121 \
     --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Install bitsandbytes for CUDA 12.x
