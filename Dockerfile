@@ -24,10 +24,6 @@ RUN python -m pip install https://github.com/bitsandbytes-foundation/bitsandbyte
 # Install xformers
 RUN pip install -U xformers --index-url https://download.pytorch.org/whl/cu121
 
-# debugging checks
-RUN python -c "import torch; print(f'PyTorch CUDA: {torch.version.cuda}')" && \
-    nvidia-smi
-
 # Install remaining requirements
 RUN python -m pip install --no-cache-dir "numpy<2"
 RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
