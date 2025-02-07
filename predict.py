@@ -33,7 +33,7 @@ def run_training(
     # NOTE: Using the new model ID for training.
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
-        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-large",
+        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-medium",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
         "--seed=42",
