@@ -26,6 +26,9 @@ RUN pip install -U xformers==0.0.22.post7
 # Install hf_transfer for faster downloads
 RUN pip install hf_transfer
 
+# Install sentencepiece for T5 tokenizer
+RUN pip install sentencepiece
+
 # Install remaining requirements
 RUN python -m pip install --no-cache-dir "numpy<2"
 RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
