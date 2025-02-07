@@ -30,7 +30,7 @@ def run_training(
             subprocess.run(["rm", "-r", folder], check=True)
         instance_data_dir = "/src/instance_images"
 
-    # NOTE: Using the new model ID for training.
+    # Updated command with memory optimization flags
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-medium",
@@ -42,18 +42,20 @@ def run_training(
         "--train_text_encoder",
         "--mixed_precision=fp16",
         "--use_8bit_adam",
-        "--gradient_accumulation_steps=1",
+        "--gradient_checkpointing",  # Added for memory efficiency
+        "--gradient_accumulation_steps=4",  # Increased from 1
         "--learning_rate=1e-6",
         "--lr_scheduler=constant",
         "--lr_warmup_steps=0",
-        "--num_class_images=50",
-        "--sample_batch_size=4",
-        f"--max_train_steps={steps}",
+        "--num_class_images=25",  # Reduced from 50
+        "--sample_batch_size=1",  # Reduced from 4
+        "--max_train_steps=10",
         f"--output_dir={output_dir}",
         "--save_interval=400",
         "--concepts_list=dreambooth/concepts_list.json",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
+        "--enable_xformers_memory_efficient_attention",  # Added for memory efficiency
     ]
 
     if sample_prompt:
@@ -68,5 +70,3 @@ def run_training(
 
     subprocess.run(cmd, check=True)
     return f"Training complete. Model saved at {output_dir}/"
-
-
