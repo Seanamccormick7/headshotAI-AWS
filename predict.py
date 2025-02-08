@@ -7,7 +7,7 @@ import shutil
 def run_training(
     instance_data: str,
     instance_prompt: str,
-    steps: int = 800,
+    steps: int = 10,
     output_dir: str = "trained_model",
     sample_prompt: str = "",
     sample_negative_prompt: str = "",
@@ -49,13 +49,12 @@ def run_training(
         "--lr_warmup_steps=0",
         "--num_class_images=25",  # Reduced from 50
         "--sample_batch_size=1",  # Reduced from 4
-        "--max_train_steps=10",
+        f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
         "--save_interval=400",
         "--concepts_list=dreambooth/concepts_list.json",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
-        "--enable_xformers_memory_efficient_attention",  # Added for memory efficiency
     ]
 
     if sample_prompt:
