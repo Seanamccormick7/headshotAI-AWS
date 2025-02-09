@@ -56,7 +56,6 @@ def run_training(
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
         "--train_batch_size=1",
-        "--enable_xformers_memory_efficient_attention",
     ]
 
     if sample_prompt:
