@@ -40,14 +40,14 @@ def run_training(
         "--resolution=512",
         "--train_batch_size=1",
         "--train_text_encoder",
-        "--mixed_precision=fp16",
+        "--mixed_precision=bf16",
         "--use_8bit_adam",
         "--gradient_checkpointing",  # Added for memory efficiency
-        "--gradient_accumulation_steps=4",  # Increased from 1
+        "--gradient_accumulation_steps=1",  # Increased from 1
         "--learning_rate=1e-6",
         "--lr_scheduler=constant",
         "--lr_warmup_steps=0",
-        "--num_class_images=25",  # Reduced from 50
+        "--num_class_images=15",  # Reduced from 50
         "--sample_batch_size=1",  # Reduced from 4
         f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
@@ -55,6 +55,8 @@ def run_training(
         "--concepts_list=dreambooth/concepts_list.json",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
+        "--train_batch_size=1",
+        "--enable_xformers_memory_efficient_attention",
     ]
 
     if sample_prompt:
