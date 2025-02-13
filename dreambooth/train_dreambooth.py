@@ -858,7 +858,11 @@ def main(args):
                         encoder_hidden_states = text_encoder(input_ids)[0]
 
                 # Predict the noise residual
-                model_pred = transformer(noisy_latents, timesteps, encoder_hidden_states).sample
+                model_pred = transformer(
+                    sample=noisy_latents,
+                    time_ids=timesteps,  # <-- pass time_ids instead of timesteps
+                    encoder_hidden_states=encoder_hidden_states
+                ).sample
 
                 # Depending on the scheduler's prediction_type
                 if noise_scheduler.config.prediction_type == "epsilon":
