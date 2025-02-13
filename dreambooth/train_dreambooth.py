@@ -727,7 +727,7 @@ def main(args):
                         encoder_hidden_states = text_encoder(input_ids_or_hidden_states)[0]
 
                 model_pred = transformer(
-                    sample=noisy_latents,
+                    hidden_states=noisy_latents,
                     timestep=timesteps,  # change time_ids -> timestep
                     encoder_hidden_states=encoder_hidden_states
                 ).sample
