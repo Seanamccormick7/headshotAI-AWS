@@ -243,7 +243,6 @@ class LatentsDataset(Dataset):
 def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
-    logger.info(args)
 
     if args.seed is not None:
         set_seed(args.seed)
@@ -254,6 +253,8 @@ def main():
         log_with="tensorboard",
         project_dir=os.path.join(args.output_dir, "logs"),
     )
+
+    logger.info(args)
 
     # 1) Optionally generate class images if prior-preservation is enabled
     if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
