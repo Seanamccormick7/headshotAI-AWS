@@ -731,28 +731,31 @@ def main(args):
                     if args.train_text_encoder:
                         # Always run text_encoder on input_ids
                         text_outputs = text_encoder(input_ids_or_hidden_states, output_hidden_states=True)
-                        encoder_hidden_states = text_outputs[0]
-                        # Get the pooled output for SD3's time embedding
-                        pooled_prompt_embeds = text_outputs[1]
+                        encoder_hidden_states = text_outputs[0]  # last_hidden_state
+                        pooled_prompt_embeds = text_outputs[1]   # pooler_output
                     else:
-                        # If latents are cached, we have hidden states
                         if not args.not_cache_latents:
+                            # We have hidden states in cache
                             encoder_hidden_states = input_ids_or_hidden_states
-                            # We need to run through text encoder just to get pooled embeddings
+                            # We still need pooled embeddings from text encoder
+                            # We'll pass a single prompt to text_encoder()[1] just to retrieve the pool
+                            # If we do not have input_ids, you need a better approach
+                            # (Consider storing the pooled emb as well when caching)
                             pooled_prompt_embeds = text_encoder(
-                                tokenizer.pad({"input_ids": [input_ids_or_hidden_states[0]]}, return_tensors="pt")["input_ids"].to(accelerator.device)
+                                tokenizer.pad({"input_ids": [input_ids_or_hidden_states[0]]}, return_tensors="pt")["input_ids"].to(accelerator.device),
+                                output_hidden_states=True
                             )[1]
                         else:
                             text_outputs = text_encoder(input_ids_or_hidden_states, output_hidden_states=True)
                             encoder_hidden_states = text_outputs[0]
                             pooled_prompt_embeds = text_outputs[1]
 
-                # Forward pass through transformer with pooled embeddings
+                # 5) Forward pass with `pooled_projections=pooled_prompt_embeds`
                 model_pred = transformer(
                     hidden_states=noisy_latents,
                     timestep=timesteps,
                     encoder_hidden_states=encoder_hidden_states,
-                    added_cond_kwargs={"text_embeds": pooled_prompt_embeds}  # Add this line
+                    pooled_projections=pooled_prompt_embeds,  # <-- pass pooled embeddings here
                 ).sample
 
                 # 6) Compute target for MSE or V-pred
