@@ -28,7 +28,7 @@ def generate_images_task(self, req_data: dict):
         userId = req_data.get("userId")
         instanceImages = req_data.get("instanceImages", [])
         callbackUrl = req_data.get("callbackUrl")
-        
+
         # 1) Download user's instance images into a temporary directory.
         instance_dir = tempfile.mkdtemp(prefix="instance_images_")
         for i, uuid in enumerate(instanceImages):
@@ -61,21 +61,18 @@ def generate_images_task(self, req_data: dict):
         glasses = req_data.get("glasses", False)
         glasses_str = "wearing glasses" if glasses else "no glasses"
 
-        # Build a descriptive prompt string.
         instance_prompt = (
             f"Photo of a {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
         )
-        
-        # Optionally, you can also build a sample prompt similarly if needed:
         sample_prompt = (
             f"High quality professional headshot of a {age_str}{gender} with {hairColor} hair "
-            f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str},"
-            f"wearing {attire}, in a {backgrounds} setting. "
+            f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
+            f"wearing {attire}, in a {backgrounds} setting."
         )
-        
-        # 4) Set the training steps (for testing, we use 10 steps)
-        training_steps = 10
+
+        # 4) Set the training steps
+        training_steps = 200
 
         # 5) Create a temporary output directory for the training results.
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
@@ -92,8 +89,8 @@ def generate_images_task(self, req_data: dict):
 
         # 6) Upload generated images to Uploadcare.
         generated_uuids = []
-        # Adjust the samples directory if your training script saves images elsewhere.
-        samples_dir = os.path.join(output_dir, "10", "samples")
+        # NOTE: The final script saves samples in: {output_dir}/samples
+        samples_dir = os.path.join(output_dir, "samples")
         if not os.path.isdir(samples_dir):
             print("No images found in", samples_dir)
         else:
