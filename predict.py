@@ -22,13 +22,9 @@ def run_training(
     if os.path.isdir(instance_data):
         instance_data_dir = str(instance_data)
     else:
-        # Ensure the extraction directory exists
         os.makedirs(instance_data_dir, exist_ok=True)
+        # Just unzip directly, no moving subfolders
         subprocess.run(["unzip", "-o", instance_data, "-d", instance_data_dir], check=True)
-        for folder in glob.glob(os.path.join(instance_data_dir, "/")):
-            subprocess.run(["mv", f"{folder}", instance_data_dir], check=True)
-            subprocess.run(["rm", "-r", folder], check=True)
-        instance_data_dir = "/src/instance_images"
 
     # Build the training command
     cmd = [
