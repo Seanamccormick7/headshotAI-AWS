@@ -728,8 +728,8 @@ def main(args):
 
                 # Predict noise
                 model_pred = transformer(
-                    hidden_states=noisy_latents,  # Changed from sample=noisy_latents
-                    timesteps=timesteps,          # Changed from time_ids=timesteps
+                    hidden_states=noisy_latents,
+                    time_ids=timesteps,  # Changed from timesteps to time_ids
                     encoder_hidden_states=encoder_hidden_states
                 ).sample
 
