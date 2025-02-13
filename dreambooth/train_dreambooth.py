@@ -692,57 +692,61 @@ def main(args):
 
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(transformer):
-                # Convert images to latents (if not cached)
+                # 1) Get latents from either the cache or on-the-fly
                 with torch.no_grad():
                     if not args.not_cache_latents:
-                        # Latents & text from cached dataset - already sampled
-                        latents = batch[0]  # This is now the sampled latent, not the distribution
+                        # Already sampled latents
+                        latents = batch[0]
                         if args.train_text_encoder:
-                            input_ids_or_hidden_states = batch[1]  # input_ids
+                            # input_ids
+                            input_ids_or_hidden_states = batch[1]
                         else:
-                            input_ids_or_hidden_states = batch[1]  # hidden_states
+                            # hidden_states
+                            input_ids_or_hidden_states = batch[1]
                     else:
-                        # Standard route
+                        # Encode latents on the fly
                         batch["pixel_values"] = batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)
                         batch["input_ids"] = batch["input_ids"].to(accelerator.device)
                         latent_dist = vae.encode(batch["pixel_values"]).latent_dist
                         latents = latent_dist.sample() * 0.18215
                         input_ids_or_hidden_states = batch["input_ids"]
 
-                # If latents is 5D, squeeze dim(1)
+                # 2) Squeeze if 5D
                 if latents.dim() == 5:
-                    latents = latents.squeeze(1)  
+                    latents = latents.squeeze(1)
 
-                bsz = latents.shape[0]  # just get the batch size
+                # 3) Generate noise
+                bsz = latents.shape[0]
                 noise = torch.randn_like(latents)
-                timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-
+                timesteps = torch.randint(
+                    0,
+                    noise_scheduler.config.num_train_timesteps,
+                    (bsz,),
+                    device=latents.device
+                )
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-                # Pass latents in [B, C, H, W] shape
-                model_pred = transformer(
-                    hidden_states=noisy_latents,     # or 'hidden_states=noisy_latents'
-                    timestep=timesteps,       # or the parameter name used by your SD3.5 model
-                    encoder_hidden_states=encoder_hidden_states
-                ).sample
-
-                # Text encoder
+                # 4) Get text encoder hidden states
                 with text_enc_context:
-                    if not args.not_cache_latents:
-                        if args.train_text_encoder:
-                            encoder_hidden_states = text_encoder(input_ids_or_hidden_states)[0]
-                        else:
-                            encoder_hidden_states = input_ids_or_hidden_states
-                    else:
+                    if args.train_text_encoder:
+                        # Always run text_encoder on input_ids
                         encoder_hidden_states = text_encoder(input_ids_or_hidden_states)[0]
+                    else:
+                        # If latents are cached, we have hidden states
+                        # If not, we must encode
+                        if not args.not_cache_latents:
+                            encoder_hidden_states = input_ids_or_hidden_states
+                        else:
+                            encoder_hidden_states = text_encoder(input_ids_or_hidden_states)[0]
 
+                # 5) Forward pass through transformer
                 model_pred = transformer(
                     hidden_states=noisy_latents,
-                    timestep=timesteps,  # change time_ids -> timestep
+                    timestep=timesteps,
                     encoder_hidden_states=encoder_hidden_states
                 ).sample
 
-                # Depending on the scheduler's prediction_type
+                # 6) Compute target for MSE or V-pred
                 if noise_scheduler.config.prediction_type == "epsilon":
                     target = noise
                 elif noise_scheduler.config.prediction_type == "v_prediction":
@@ -750,9 +754,8 @@ def main(args):
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-                # If using prior preservation, half of the batch is instance, half is class
+                # 7) Prior-preservation loss or normal MSE
                 if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
-                    # Split model_pred and target into two halves
                     half = bsz // 2
                     model_pred, model_pred_prior = model_pred[:half], model_pred[half:]
                     target, target_prior = target[:half], target[half:]
