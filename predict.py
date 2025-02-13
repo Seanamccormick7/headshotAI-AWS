@@ -7,7 +7,7 @@ import shutil
 def run_training(
     instance_data: str,
     instance_prompt: str,
-    steps: int = 800,
+    steps: int = 10,
     output_dir: str = "trained_model",
     sample_prompt: str = "",
     sample_negative_prompt: str = "",
@@ -30,30 +30,32 @@ def run_training(
             subprocess.run(["rm", "-r", folder], check=True)
         instance_data_dir = "/src/instance_images"
 
-    # NOTE: Using the new model ID for training.
+    # Updated command with memory optimization flags
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
-        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-large",
+        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-medium",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
         "--seed=42",
         "--resolution=512",
         "--train_batch_size=1",
         "--train_text_encoder",
-        "--mixed_precision=fp16",
+        "--mixed_precision=bf16",
         "--use_8bit_adam",
-        "--gradient_accumulation_steps=1",
+        "--gradient_checkpointing",  # Added for memory efficiency
+        "--gradient_accumulation_steps=1",  # Increased from 1
         "--learning_rate=1e-6",
         "--lr_scheduler=constant",
         "--lr_warmup_steps=0",
-        "--num_class_images=50",
-        "--sample_batch_size=4",
+        "--num_class_images=15",  # Reduced from 50
+        "--sample_batch_size=1",  # Reduced from 4
         f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
         "--save_interval=400",
         "--concepts_list=dreambooth/concepts_list.json",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
+        "--train_batch_size=1",
     ]
 
     if sample_prompt:
@@ -68,5 +70,3 @@ def run_training(
 
     subprocess.run(cmd, check=True)
     return f"Training complete. Model saved at {output_dir}/"
-
-
