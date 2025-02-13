@@ -709,17 +709,22 @@ def main(args):
                         latents = latent_dist.sample() * 0.18215
                         input_ids_or_hidden_states = batch["input_ids"]
 
-                # Flatten the latents from [B, C, H, W] to [B, C*H*W]
-                b, c, h, w = latents.shape
-                latents = latents.reshape(b, c * h * w)
+                # If latents is 5D, squeeze dim(1)
+                if latents.dim() == 5:
+                    latents = latents.squeeze(1)  
 
+                bsz = latents.shape[0]  # just get the batch size
                 noise = torch.randn_like(latents)
-                timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (b,), device=latents.device)
-                timesteps = timesteps.long()
+                timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
 
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-                # Reshape back to [B, C, H, W]
-                noisy_latents = noisy_latents.reshape(b, c, h, w)
+
+                # Pass latents in [B, C, H, W] shape
+                model_pred = transformer(
+                    hidden_states=noisy_latents,     # or 'hidden_states=noisy_latents'
+                    timestep=timesteps,       # or the parameter name used by your SD3.5 model
+                    encoder_hidden_states=encoder_hidden_states
+                ).sample
 
                 # Text encoder
                 with text_enc_context:
