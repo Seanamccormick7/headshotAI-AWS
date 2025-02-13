@@ -388,8 +388,6 @@ class PromptDataset(Dataset):
 
 
 class LatentsDataset(Dataset):
-    """When caching latents, we store them in memory and wrap them in this dataset."""
-
     def __init__(self, latents_cache, text_encoder_cache):
         self.latents_cache = latents_cache
         self.text_encoder_cache = text_encoder_cache
@@ -398,7 +396,9 @@ class LatentsDataset(Dataset):
         return len(self.latents_cache)
 
     def __getitem__(self, index):
-        return self.latents_cache[index], self.text_encoder_cache[index]
+        # Sample from the DiagonalGaussianDistribution
+        latent = self.latents_cache[index].sample() * 0.18215
+        return (latent, self.text_encoder_cache[index])
 
 
 def main(args):
@@ -695,22 +695,19 @@ def main(args):
                 # Convert images to latents (if not cached)
                 with torch.no_grad():
                     if not args.not_cache_latents:
-                        # Latents & text from cached dataset
-                        latent_dist = batch[0][0]
+                        # Latents & text from cached dataset - already sampled
+                        latents = batch[0]  # This is now the sampled latent, not the distribution
                         if args.train_text_encoder:
-                            # input_ids
-                            input_ids_or_hidden_states = batch[0][1]
+                            input_ids_or_hidden_states = batch[1]  # input_ids
                         else:
-                            # hidden_states
-                            input_ids_or_hidden_states = batch[0][1]
+                            input_ids_or_hidden_states = batch[1]  # hidden_states
                     else:
                         # Standard route
                         batch["pixel_values"] = batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)
                         batch["input_ids"] = batch["input_ids"].to(accelerator.device)
                         latent_dist = vae.encode(batch["pixel_values"]).latent_dist
+                        latents = latent_dist.sample() * 0.18215
                         input_ids_or_hidden_states = batch["input_ids"]
-
-                    latents = latent_dist.sample() * 0.18215
 
                 noise = torch.randn_like(latents)
                 bsz = latents.shape[0]
