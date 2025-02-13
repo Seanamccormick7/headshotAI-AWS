@@ -16,7 +16,7 @@ def run_training(
     save_infer_steps: int = 20
 ) -> str:
     """Main training function without Cog dependencies"""
-    
+
     # Existing data handling logic
     instance_data_dir = "/src/instance_images"
     if os.path.isdir(instance_data):
@@ -25,8 +25,8 @@ def run_training(
         # Ensure the extraction directory exists
         os.makedirs(instance_data_dir, exist_ok=True)
         subprocess.run(["unzip", "-o", instance_data, "-d", instance_data_dir], check=True)
-        for folder in glob.glob(os.path.join(instance_data_dir, "*/")):
-            subprocess.run(["mv", f"{folder}*", instance_data_dir], check=True)
+        for folder in glob.glob(os.path.join(instance_data_dir, "/")):
+            subprocess.run(["mv", f"{folder}", instance_data_dir], check=True)
             subprocess.run(["rm", "-r", folder], check=True)
         instance_data_dir = "/src/instance_images"
 
