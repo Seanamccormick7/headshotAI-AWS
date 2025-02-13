@@ -730,20 +730,29 @@ def main(args):
                 with text_enc_context:
                     if args.train_text_encoder:
                         # Always run text_encoder on input_ids
-                        encoder_hidden_states = text_encoder(input_ids_or_hidden_states)[0]
+                        text_outputs = text_encoder(input_ids_or_hidden_states, output_hidden_states=True)
+                        encoder_hidden_states = text_outputs[0]
+                        # Get the pooled output for SD3's time embedding
+                        pooled_prompt_embeds = text_outputs[1]
                     else:
                         # If latents are cached, we have hidden states
-                        # If not, we must encode
                         if not args.not_cache_latents:
                             encoder_hidden_states = input_ids_or_hidden_states
+                            # We need to run through text encoder just to get pooled embeddings
+                            pooled_prompt_embeds = text_encoder(
+                                tokenizer.pad({"input_ids": [input_ids_or_hidden_states[0]]}, return_tensors="pt")["input_ids"].to(accelerator.device)
+                            )[1]
                         else:
-                            encoder_hidden_states = text_encoder(input_ids_or_hidden_states)[0]
+                            text_outputs = text_encoder(input_ids_or_hidden_states, output_hidden_states=True)
+                            encoder_hidden_states = text_outputs[0]
+                            pooled_prompt_embeds = text_outputs[1]
 
-                # 5) Forward pass through transformer
+                # Forward pass through transformer with pooled embeddings
                 model_pred = transformer(
                     hidden_states=noisy_latents,
                     timestep=timesteps,
-                    encoder_hidden_states=encoder_hidden_states
+                    encoder_hidden_states=encoder_hidden_states,
+                    added_cond_kwargs={"text_embeds": pooled_prompt_embeds}  # Add this line
                 ).sample
 
                 # 6) Compute target for MSE or V-pred
