@@ -428,11 +428,13 @@ def main():
                     # but for simplicity, let's call text_encoder(...) for single CLIP. Or do the aggregator if needed.
                     # If you want the aggregator, do:
                     prompt_embeds = pipe.encode_prompt(
-                        ids,
+                        prompt=ids,
+                        prompt_2=None,
+                        prompt_3=None,
                         device=accelerator.device,
                         num_images_per_prompt=1,
                         do_classifier_free_guidance=False,
-                        max_sequence_length=256  # for T5
+                        max_sequence_length=256
                     )
                     text_encoder_cache.append(prompt_embeds)
 
