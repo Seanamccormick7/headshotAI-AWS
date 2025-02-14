@@ -34,8 +34,7 @@ def run_training(
         "--prior_loss_weight=1.0",
         "--seed=42",
         "--resolution=512",
-        "--train_batch_size=1",
-        "--train_text_encoder",
+        "--train_batch_size=1", #"--train_text_encoder", add to train text encoder (high memory usage)
         "--mixed_precision=bf16",
         "--use_8bit_adam",
         "--gradient_checkpointing",
