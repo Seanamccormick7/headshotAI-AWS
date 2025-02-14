@@ -19,7 +19,7 @@ from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
     DDPMScheduler,
-    StableDiffusion3Pipeline,
+    StableDiffusion3Pipeline,  # <-- Make sure to import at top level
     SD3Transformer2DModel,
 )
 from diffusers.optimization import get_scheduler
@@ -29,14 +29,12 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
-
 # Enable TF32 for better performance on Ampere GPUs
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 
 logger = get_logger(__name__)
-
 
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="DreamBooth fine-tuning script for SD 3.5")
@@ -232,7 +230,7 @@ class LatentsDataset(Dataset):
         latents = latent_dist.sample() * 0.18215
 
         # If there's an extra dimension => remove it
-        # e.g. shape [B, 1, 16, 64, 64] => we only want [B, 16, 64, 64]
+        # e.g. shape [B, 1, 16, 64, 64] => we want [B, 16, 64, 64]
         if latents.dim() == 5:
             latents = latents.squeeze(1)
 
@@ -257,7 +255,8 @@ def main():
 
     # 1) Possibly generate class images if prior-preservation
     if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
-        from diffusers import StableDiffusion3Pipeline, DDIMScheduler
+        # We import inside the function just in case
+        from diffusers import DDIMScheduler
         class_dir = Path(args.class_data_dir)
         class_dir.mkdir(parents=True, exist_ok=True)
         existing = len(list(class_dir.iterdir()))
@@ -288,6 +287,7 @@ def main():
 
     # 2) Load pipeline with T5 disabled (text_encoder_3=None)
     logger.info("Loading StableDiffusion3Pipeline in float16 for training...")
+
     pipe = StableDiffusion3Pipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         text_encoder_3=None,
@@ -485,7 +485,7 @@ def main():
                 if not args.not_cache_latents:
                     latents, text_data = batch
                     latents = latents.to(accelerator.device, dtype=weight_dtype)
-                    # (We already squeezed dimension inside LatentsDataset, but let's double-check)
+                    # double-check shape
                     if latents.dim() == 5:
                         latents = latents.squeeze(1)
 
@@ -526,7 +526,7 @@ def main():
                             hidden_states = hidden_states_1
                             encoder_hidden_states = hidden_states
                         else:
-                            # Freeze text enc: run once for hidden states
+                            # not training => run text_encoder once
                             hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
                             encoder_hidden_states = hidden_states_1
 
@@ -612,3 +612,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
