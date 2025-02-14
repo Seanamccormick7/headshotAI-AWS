@@ -514,7 +514,9 @@ def main():
                             # Or do text_encoder(...) if you only want single-CLIP.
                             # We'll do aggregator for multi-encoder:
                             prompt_embeds = pipe.encode_prompt(
-                                text_data,  # input_ids
+                                prompt=text_data,
+                                prompt_2=None,
+                                prompt_3=None,
                                 device=latents.device,
                                 num_images_per_prompt=1,
                                 do_classifier_free_guidance=False,
@@ -541,8 +543,10 @@ def main():
                         if args.train_text_encoder:
                             # aggregator
                             prompt_embeds = pipe.encode_prompt(
-                                ids,
-                                device=latents.device,
+                                prompt=ids,
+                                prompt_2=None,
+                                prompt_3=None,
+                                device=accelerator.device,
                                 num_images_per_prompt=1,
                                 do_classifier_free_guidance=False,
                                 max_sequence_length=256
@@ -551,8 +555,10 @@ def main():
                         else:
                             # aggregator but text enc. is frozen
                             encoder_hidden_states = pipe.encode_prompt(
-                                ids,
-                                device=latents.device,
+                                prompt=ids,
+                                prompt_2=None,
+                                prompt_3=None,
+                                device=accelerator.device,
                                 num_images_per_prompt=1,
                                 do_classifier_free_guidance=False,
                                 max_sequence_length=256
