@@ -290,13 +290,13 @@ def main():
             torch.cuda.empty_cache()
 
     # 2) Load pipeline, freeze or train text encoders, freeze vae
-    logger.info("Loading StableDiffusion3Pipeline in float32 for training...")
+    logger.info("Loading StableDiffusion3Pipeline in float16 for training...")
     pipe = StableDiffusion3Pipeline.from_pretrained(
-        args.pretrained_model_name_or_path,
-        torch_dtype=torch.float32,
-        use_auth_token=os.environ.get("HF_TOKEN"),
+        "stabilityai/stable-diffusion-3.5-medium",
+        text_encoder_3=None,
+        tokenizer_3=None,
+        torch_dtype=torch.float16,
         safety_checker=None,
-        revision=args.revision
     )
 
     vae = pipe.vae
