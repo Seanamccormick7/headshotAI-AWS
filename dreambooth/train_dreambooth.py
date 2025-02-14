@@ -37,6 +37,7 @@ torch.backends.cudnn.benchmark = True
 
 logger = get_logger(__name__)
 
+
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="DreamBooth fine-tuning script for SD 3.5")
 
@@ -46,65 +47,56 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         required=True,
-        help="Path to pretrained SD3.5 model or HF repo, e.g. 'stabilityai/stable-diffusion-3.5-medium'.",
+        help="Model path or HF repo, e.g. 'stabilityai/stable-diffusion-3.5-medium'",
     )
 
-    # Optional model revisions / paths
+    # Optional model / text encs
     parser.add_argument("--pretrained_vae_name_or_path", type=str, default=None)
-    parser.add_argument("--revision", type=str, default=None,
-                        help="Revision of the pretrained model from huggingface.co/models.")
-
-    # Tokenizer / text encoder
+    parser.add_argument("--revision", type=str, default=None)
     parser.add_argument("--tokenizer_name", type=str, default=None)
-    parser.add_argument("--train_text_encoder", action="store_true",
-                        help="Train the text encoders (CLIP-L, CLIP-G, T5). Potentially large VRAM usage.")
+    parser.add_argument("--train_text_encoder", action="store_true", help="Train CLIP text encoder(s). High VRAM usage.")
 
-    # Data / prompts
-    parser.add_argument("--instance_data_dir", type=str, default=None,
-                        help="Folder containing instance images.")
-    parser.add_argument("--instance_prompt", type=str, default=None,
-                        help="Prompt with identifier specifying the instance (e.g. 'photo of sks person').")
-    parser.add_argument("--class_data_dir", type=str, default=None,
-                        help="Folder containing class images for prior-preservation.")
-    parser.add_argument("--class_prompt", type=str, default=None,
-                        help="Prompt for class images, if prior-preservation is used.")
+    # Data & prompts
+    parser.add_argument("--instance_data_dir", type=str, default=None)
+    parser.add_argument("--instance_prompt", type=str, default=None)
+    parser.add_argument("--class_data_dir", type=str, default=None)
+    parser.add_argument("--class_prompt", type=str, default=None)
 
     # Sample saving (end-of-training)
-    parser.add_argument("--save_sample_prompt", type=str, default=None,
-                        help="If set, generate sample images at the end.")
+    parser.add_argument("--save_sample_prompt", type=str, default=None)
     parser.add_argument("--save_sample_negative_prompt", type=str, default=None)
     parser.add_argument("--n_save_sample", type=int, default=4)
     parser.add_argument("--save_guidance_scale", type=float, default=7.5)
     parser.add_argument("--save_infer_steps", type=int, default=20)
 
     # Prior preservation
-    parser.add_argument("--with_prior_preservation", action="store_true")
+    parser.add_argument("--with_prior_preservation", action="store_true", default=False)
     parser.add_argument("--prior_loss_weight", type=float, default=1.0)
     parser.add_argument("--num_class_images", type=int, default=100)
 
-    # Training parameters
+    # Training hyperparams
     parser.add_argument("--output_dir", type=str, default="text-inversion-model")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--resolution", type=int, default=512)
-    parser.add_argument("--center_crop", action="store_true")
+    parser.add_argument("--center_crop", action="store_true", default=False)
     parser.add_argument("--train_batch_size", type=int, default=4)
     parser.add_argument("--sample_batch_size", type=int, default=4)
     parser.add_argument("--max_train_steps", type=int, default=1000)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1)
-    parser.add_argument("--gradient_checkpointing", action="store_true")
+    parser.add_argument("--gradient_checkpointing", action="store_true", default=False)
     parser.add_argument("--learning_rate", type=float, default=5e-6)
     parser.add_argument("--scale_lr", action="store_true", default=False)
     parser.add_argument("--lr_scheduler", type=str, default="constant")
     parser.add_argument("--lr_warmup_steps", type=int, default=500)
-    parser.add_argument("--use_8bit_adam", action="store_true")
+    parser.add_argument("--use_8bit_adam", action="store_true", default=False)
     parser.add_argument("--adam_beta1", type=float, default=0.9)
     parser.add_argument("--adam_beta2", type=float, default=0.999)
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2)
     parser.add_argument("--adam_epsilon", type=float, default=1e-08)
     parser.add_argument("--max_grad_norm", type=float, default=1.0)
-    parser.add_argument("--mixed_precision", type=str, default=None, choices=["no","fp16","bf16"])
-    parser.add_argument("--not_cache_latents", action="store_true")
-    parser.add_argument("--hflip", action="store_true")
+    parser.add_argument("--mixed_precision", type=str, default=None, choices=["no", "fp16", "bf16"])
+    parser.add_argument("--not_cache_latents", action="store_true", default=False)
+    parser.add_argument("--hflip", action="store_true", default=False)
     parser.add_argument("--local_rank", type=int, default=-1)
 
     args = parser.parse_args(input_args) if input_args else parser.parse_args()
@@ -118,7 +110,8 @@ def parse_args(input_args=None):
 
 class DreamBoothDataset(Dataset):
     """
-    A dataset to prepare instance (and optional class) images with prompts for fine-tuning SD3.5.
+    A dataset to prepare instance (and optional class) images with prompts for fine-tuning.
+    It uses a single CLIP tokenizer. T5 is disabled by passing text_encoder_3=None in the pipeline.
     """
 
     def __init__(
@@ -177,16 +170,17 @@ class DreamBoothDataset(Dataset):
     def __getitem__(self, idx):
         example = {}
 
+        # Load instance image
         inst_img_path = self.instance_images_path[idx % self.num_instance_images]
         inst_img = Image.open(inst_img_path).convert("RGB")
         example["instance_images"] = self.image_transforms(inst_img)
 
-        # Tokenize instance prompt
+        # Convert prompt to input_ids
         example["instance_prompt_ids"] = self.tokenizer(
             self.instance_prompt,
             padding="do_not_pad",
             truncation=True,
-            max_length=self.tokenizer.model_max_length,
+            max_length=self.tokenizer.model_max_length
         ).input_ids
 
         # If prior-preservation
@@ -194,12 +188,11 @@ class DreamBoothDataset(Dataset):
             cls_img_path = self.class_images_path[idx % self.num_class_images]
             cls_img = Image.open(cls_img_path).convert("RGB")
             example["class_images"] = self.image_transforms(cls_img)
-
             example["class_prompt_ids"] = self.tokenizer(
                 self.class_prompt,
                 padding="do_not_pad",
                 truncation=True,
-                max_length=self.tokenizer.model_max_length,
+                max_length=self.tokenizer.model_max_length
             ).input_ids
 
         return example
@@ -207,7 +200,7 @@ class DreamBoothDataset(Dataset):
 
 class PromptDataset(Dataset):
     """
-    For generating class images if not enough exist.
+    For generating class images if not enough exist (prior-preservation).
     """
 
     def __init__(self, prompt, num_samples):
@@ -217,13 +210,14 @@ class PromptDataset(Dataset):
     def __len__(self):
         return self.num_samples
 
-    def __getitem__(self, i):
-        return {"prompt": self.prompt, "index": i}
+    def __getitem__(self, idx):
+        return {"prompt": self.prompt, "index": idx}
 
 
 class LatentsDataset(Dataset):
     """
-    For cached latents. We store a DiagonalGaussianDistribution for each image, plus text encoder data.
+    Stores (latent_distribution, text_data),
+    where 'text_data' is either input_ids (if training text encoder) or hidden states (if not training text encoder).
     """
 
     def __init__(self, latents_cache, text_encoder_cache):
@@ -234,7 +228,6 @@ class LatentsDataset(Dataset):
         return len(self.latents_cache)
 
     def __getitem__(self, idx):
-        # Each item is (latent_dist, text_data)
         latent_dist = self.latents_cache[idx]  # DiagonalGaussianDistribution
         latents = latent_dist.sample() * 0.18215
         return (latents, self.text_encoder_cache[idx])
@@ -247,6 +240,7 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
+    from accelerate import Accelerator
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
@@ -256,8 +250,9 @@ def main():
 
     logger.info(args)
 
-    # 1) Optionally generate class images if prior-preservation is enabled
+    # 1) Possibly generate class images if prior-preservation
     if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
+        from diffusers import StableDiffusion3Pipeline, DDIMScheduler
         class_dir = Path(args.class_data_dir)
         class_dir.mkdir(parents=True, exist_ok=True)
         existing = len(list(class_dir.iterdir()))
@@ -267,9 +262,7 @@ def main():
             pipe_prior = StableDiffusion3Pipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 torch_dtype=torch.float16 if accelerator.device.type=="cuda" else torch.float32,
-                safety_checker=None,
                 revision=args.revision,
-                use_auth_token=os.environ.get("HF_TOKEN"),
             )
             pipe_prior.scheduler = DDIMScheduler.from_config(pipe_prior.scheduler.config)
             if is_xformers_available():
@@ -283,30 +276,29 @@ def main():
                 for batch in tqdm(dl, desc="Generating class images"):
                     images = pipe_prior(batch["prompt"]).images
                     for i, img in enumerate(images):
-                        name = f"{batch['index'][i] + existing}.jpg"
-                        img.save(class_dir / name)
+                        img.save(class_dir / f"{batch['index'][i] + existing}.jpg")
 
             del pipe_prior
             torch.cuda.empty_cache()
 
-    # 2) Load pipeline, freeze or train text encoders, freeze vae
+    # 2) Load pipeline with T5 disabled (text_encoder_3=None)
     logger.info("Loading StableDiffusion3Pipeline in float16 for training...")
+    from diffusers import StableDiffusion3Pipeline
     pipe = StableDiffusion3Pipeline.from_pretrained(
-        "stabilityai/stable-diffusion-3.5-medium",
+        args.pretrained_model_name_or_path,
         text_encoder_3=None,
         tokenizer_3=None,
         torch_dtype=torch.float16,
-        safety_checker=None,
     )
 
     vae = pipe.vae
-    text_encoder = pipe.text_encoder
-    text_encoder_2 = pipe.text_encoder_2
-    text_encoder_3 = pipe.text_encoder_3  # newly added line
+    text_encoder = pipe.text_encoder           # CLIP #1
+    text_encoder_2 = pipe.text_encoder_2       # CLIP #2
+    text_encoder_3 = pipe.text_encoder_3       # disabled => None
     transformer = pipe.transformer
     tokenizer = pipe.tokenizer
     tokenizer_2 = pipe.tokenizer_2
-    tokenizer_3 = pipe.tokenizer_3  # newly added line
+    tokenizer_3 = pipe.tokenizer_3             # None
 
     vae.requires_grad_(False)
     if not args.train_text_encoder:
@@ -325,43 +317,11 @@ def main():
             if text_encoder_2: text_encoder_2.gradient_checkpointing_enable()
             if text_encoder_3: text_encoder_3.gradient_checkpointing_enable()
 
-    if args.scale_lr:
-        args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
-        )
-
-    # Setup optimizer
-    if args.use_8bit_adam:
-        import bitsandbytes as bnb
-        optimizer_cls = bnb.optim.AdamW8bit
-    else:
-        optimizer_cls = torch.optim.AdamW
-
-    if args.train_text_encoder:
-        params_to_optimize = (
-            list(transformer.parameters()) +
-            list(text_encoder.parameters()) +
-            list(text_encoder_2.parameters()) +
-            list(text_encoder_3.parameters())  # Add T5 encoder
-        )
-    else:
-        params_to_optimize = transformer.parameters()
-
-    optimizer = optimizer_cls(
-        params_to_optimize,
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
-    )
-
-    noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
-
-    # 3) Create dataset + dataloader
+    # 3) Setup dataset & dataloader
     train_dataset = DreamBoothDataset(
         instance_data_dir=args.instance_data_dir,
         instance_prompt=args.instance_prompt,
-        tokenizer=tokenizer,  # main tokenizer
+        tokenizer=tokenizer,
         with_prior_preservation=args.with_prior_preservation,
         class_data_dir=args.class_data_dir,
         class_prompt=args.class_prompt,
@@ -384,7 +344,6 @@ def main():
 
         pixel_values = torch.stack(pixel_values).float().contiguous()
         input_ids = tokenizer.pad({"input_ids": input_ids_list}, padding=True, return_tensors="pt").input_ids
-
         return {"pixel_values": pixel_values, "input_ids": input_ids}
 
     train_dataloader = torch.utils.data.DataLoader(
@@ -395,7 +354,7 @@ def main():
         pin_memory=True,
     )
 
-    # Move VAE + text_encoders to GPU if not caching latents
+    # 4) Move models to GPU (unless we do latents caching)
     weight_dtype = torch.float32
     if args.mixed_precision == "fp16":
         weight_dtype = torch.float16
@@ -408,7 +367,31 @@ def main():
         if text_encoder_2: text_encoder_2.to(accelerator.device, dtype=weight_dtype)
         if text_encoder_3: text_encoder_3.to(accelerator.device, dtype=weight_dtype)
 
-    # 4) Optionally cache latents
+    # 5) Setup optimizer
+    if args.use_8bit_adam:
+        import bitsandbytes as bnb
+        optimizer_cls = bnb.optim.AdamW8bit
+    else:
+        optimizer_cls = torch.optim.AdamW
+
+    if args.train_text_encoder:
+        params_to_optimize = list(transformer.parameters())
+        if text_encoder:   params_to_optimize += list(text_encoder.parameters())
+        if text_encoder_2: params_to_optimize += list(text_encoder_2.parameters())
+        if text_encoder_3: params_to_optimize += list(text_encoder_3.parameters())
+    else:
+        params_to_optimize = transformer.parameters()
+
+    optimizer = optimizer_cls(
+        params_to_optimize,
+        lr=args.learning_rate,
+        betas=(args.adam_beta1, args.adam_beta2),
+        weight_decay=args.adam_weight_decay,
+        eps=args.adam_epsilon,
+    )
+
+    # 6) Optionally cache latents
+    from torch.utils.data import DataLoader
     if not args.not_cache_latents:
         logger.info("Caching latents for dataset...")
         latents_cache = []
@@ -418,27 +401,24 @@ def main():
             with torch.no_grad():
                 pv = batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)
                 ids = batch["input_ids"].to(accelerator.device)
+                # 1) encode images to latents
                 latent_dist = vae.encode(pv).latent_dist
                 latents_cache.append(latent_dist)
 
+                # 2) store either input_ids (if training text encoder) or hidden states
                 if args.train_text_encoder:
+                    # store the raw input_ids so we can backprop in the main loop
                     text_encoder_cache.append(ids)
                 else:
-                    # we call pipeline.encode_prompt(...) if we wanted the multi-encoder aggregator
-                    # but for simplicity, let's call text_encoder(...) for single CLIP. Or do the aggregator if needed.
-                    # If you want the aggregator, do:
-                    prompt_embeds = pipe.encode_prompt(
-                        prompt=ids,
-                        prompt_2=None,
-                        prompt_3=None,
-                        device=accelerator.device,
-                        num_images_per_prompt=1,
-                        do_classifier_free_guidance=False,
-                        max_sequence_length=256
-                    )
-                    text_encoder_cache.append(prompt_embeds)
+                    # direct call to text_encoder
+                    hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
+                    hidden_states_2 = text_encoder_2(ids)[0] if text_encoder_2 else None
+                    # If you want to combine them, e.g.:
+                    # hidden_states = torch.cat([hidden_states_1, hidden_states_2], dim=-1)  # if dims match
+                    # For simplicity, let's only use text_encoder #1:
+                    hidden_states = hidden_states_1
+                    text_encoder_cache.append(hidden_states)
 
-        from torch.utils.data import DataLoader
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
         train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
 
@@ -450,17 +430,18 @@ def main():
             if text_encoder_3: del text_encoder_3
         torch.cuda.empty_cache()
 
-    # 5) Scheduler logic
+    # 7) LR scheduler
+    noise_scheduler = DDPMScheduler.from_config(args.pretrained_model_name_or_path, subfolder="scheduler")
     steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     max_train_steps = args.max_train_steps
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         optimizer=optimizer,
         num_warmup_steps=args.lr_warmup_steps,
-        num_training_steps=max_train_steps*args.gradient_accumulation_steps,
+        num_training_steps=max_train_steps * args.gradient_accumulation_steps,
     )
 
-    # 6) Prepare models + data with accelerator
+    # 8) Prepare for training
     objs_to_prepare = [transformer, optimizer, train_dataloader, lr_scheduler]
     if args.train_text_encoder:
         objs_to_prepare = [transformer, text_encoder, text_encoder_2, text_encoder_3, optimizer, train_dataloader, lr_scheduler]
@@ -483,12 +464,11 @@ def main():
 
     accelerator.init_trackers("dreambooth_sd3.5")
 
-    # 7) Training loop
+    # 9) Training loop
     global_step = 0
     progress_bar = tqdm(range(max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    # If not training text encoder, we won't do backprop for them
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
 
     for epoch in range(9999999):
@@ -500,10 +480,9 @@ def main():
 
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(transformer):
-                # If latents are cached, batch = [ latents, text_data ]
-                # If not cached, batch = { "pixel_values", "input_ids" }
                 if not args.not_cache_latents:
                     latents, text_data = batch
+                    latents = latents.to(accelerator.device, dtype=weight_dtype)
                     bsz = latents.shape[0]
                     noise = torch.randn_like(latents)
                     timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
@@ -511,24 +490,14 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # text_data is input_ids
-                            # we call pipe.encode_prompt with the aggregator?
-                            # Or do text_encoder(...) if you only want single-CLIP.
-                            # We'll do aggregator for multi-encoder:
-                            prompt_embeds = pipe.encode_prompt(
-                                prompt=text_data,
-                                prompt_2=None,
-                                prompt_3=None,
-                                device=latents.device,
-                                num_images_per_prompt=1,
-                                do_classifier_free_guidance=False,
-                                max_sequence_length=256
-                            )
-                            encoder_hidden_states = prompt_embeds
+                            # text_data are input_ids; backprop through text_encoder
+                            hidden_states_1 = text_encoder(text_data)[0] if text_encoder else None
+                            hidden_states_2 = text_encoder_2(text_data)[0] if text_encoder_2 else None
+                            hidden_states = hidden_states_1  # or combine if you want
+                            encoder_hidden_states = hidden_states
                         else:
-                            # text_data is already "prompt_embeds" if we stored them
+                            # text_data is already hidden states from above caching
                             encoder_hidden_states = text_data
-
                 else:
                     # not caching latents
                     pv = batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)
@@ -543,50 +512,38 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # aggregator
-                            prompt_embeds = pipe.encode_prompt(
-                                prompt=ids,
-                                prompt_2=None,
-                                prompt_3=None,
-                                device=accelerator.device,
-                                num_images_per_prompt=1,
-                                do_classifier_free_guidance=False,
-                                max_sequence_length=256
-                            )
-                            encoder_hidden_states = prompt_embeds
+                            # aggregator or direct text_encoder
+                            hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
+                            hidden_states_2 = text_encoder_2(ids)[0] if text_encoder_2 else None
+                            hidden_states = hidden_states_1  # or combine
+                            encoder_hidden_states = hidden_states
                         else:
-                            # aggregator but text enc. is frozen
-                            encoder_hidden_states = pipe.encode_prompt(
-                                prompt=ids,
-                                prompt_2=None,
-                                prompt_3=None,
-                                device=accelerator.device,
-                                num_images_per_prompt=1,
-                                do_classifier_free_guidance=False,
-                                max_sequence_length=256
-                            )
+                            # not training => direct single-CLIP call
+                            hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
+                            encoder_hidden_states = hidden_states_1
 
-                # Forward pass in the "transformer"
+                # Forward pass
                 model_pred = transformer(
                     hidden_states=noisy_latents,
                     timestep=timesteps,
                     encoder_hidden_states=encoder_hidden_states,
                 ).sample
 
-                # MSE or V-pred
+                # Target
                 if noise_scheduler.config.prediction_type == "epsilon":
                     target = noise
                 elif noise_scheduler.config.prediction_type == "v_prediction":
                     target = noise_scheduler.get_velocity(latents, noise, timesteps)
                 else:
-                    raise ValueError("Unknown prediction_type in noise_scheduler")
+                    raise ValueError("Unknown prediction_type")
 
+                # If prior-preservation, half batch is instance, half is class
                 if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
                     half = bsz // 2
                     mp1, mp2 = model_pred[:half], model_pred[half:]
-                    tar1, tar2 = target[:half], target[half:]
-                    loss = F.mse_loss(mp1.float(), tar1.float(), reduction="mean")
-                    prior_loss = F.mse_loss(mp2.float(), tar2.float(), reduction="mean")
+                    t1, t2 = target[:half], target[half:]
+                    loss = F.mse_loss(mp1.float(), t1.float(), reduction="mean")
+                    prior_loss = F.mse_loss(mp2.float(), t2.float(), reduction="mean")
                     loss = loss + args.prior_loss_weight * prior_loss
                 else:
                     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
@@ -607,24 +564,23 @@ def main():
         if global_step >= max_train_steps:
             break
 
-    # 8) Final Save
+    # 10) Final Save
     if accelerator.is_main_process:
         logger.info("** Saving final pipeline weights **")
-
-        # Unwrap
+        # unwrap
         unwrapped_transformer = accelerator.unwrap_model(transformer)
         pipe.transformer = unwrapped_transformer
 
         if args.train_text_encoder:
-            pipe.text_encoder = accelerator.unwrap_model(pipe.text_encoder)
-            pipe.text_encoder_2 = accelerator.unwrap_model(pipe.text_encoder_2)
-            pipe.text_encoder_3 = accelerator.unwrap_model(pipe.text_encoder_3)
+            pipe.text_encoder = accelerator.unwrap_model(pipe.text_encoder) if pipe.text_encoder else None
+            pipe.text_encoder_2 = accelerator.unwrap_model(pipe.text_encoder_2) if pipe.text_encoder_2 else None
+            pipe.text_encoder_3 = accelerator.unwrap_model(pipe.text_encoder_3) if pipe.text_encoder_3 else None
 
         pipe.to(dtype=torch.float16)
         pipe.save_pretrained(args.output_dir)
         logger.info(f"Model saved at {args.output_dir}")
 
-        # Optionally sample final images
+        # Optionally sample images
         if args.save_sample_prompt:
             logger.info("Generating sample images with final pipeline...")
             pipe.to(accelerator.device)
