@@ -30,8 +30,7 @@ def run_training(
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-medium",
-        "--with_prior_preservation",              # Keep if you want prior-preservation
-        "--prior_loss_weight=1.0",
+        "--prior_loss_weight=1.0", #"--with_prior_preservation", Keep if you want prior-preservation 
         "--seed=42",
         "--resolution=512",
         "--train_batch_size=1", #"--train_text_encoder", add to train text encoder (high memory usage)
