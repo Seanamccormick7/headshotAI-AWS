@@ -10,7 +10,6 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
-import torch.utils.checkpoint
 from torch.utils.data import Dataset
 
 from accelerate import Accelerator
@@ -29,6 +28,7 @@ from PIL import Image
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
+
 
 # Enable TF32 for better performance on Ampere GPUs
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -230,6 +230,12 @@ class LatentsDataset(Dataset):
     def __getitem__(self, idx):
         latent_dist = self.latents_cache[idx]  # DiagonalGaussianDistribution
         latents = latent_dist.sample() * 0.18215
+
+        # If there's an extra dimension => remove it
+        # e.g. shape [B, 1, 16, 64, 64] => we only want [B, 16, 64, 64]
+        if latents.dim() == 5:
+            latents = latents.squeeze(1)
+
         return (latents, self.text_encoder_cache[idx])
 
 
@@ -240,7 +246,6 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    from accelerate import Accelerator
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
@@ -283,7 +288,6 @@ def main():
 
     # 2) Load pipeline with T5 disabled (text_encoder_3=None)
     logger.info("Loading StableDiffusion3Pipeline in float16 for training...")
-    from diffusers import StableDiffusion3Pipeline
     pipe = StableDiffusion3Pipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         text_encoder_3=None,
@@ -413,16 +417,13 @@ def main():
                     # direct call to text_encoder
                     hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
                     hidden_states_2 = text_encoder_2(ids)[0] if text_encoder_2 else None
-                    # If you want to combine them, e.g.:
-                    # hidden_states = torch.cat([hidden_states_1, hidden_states_2], dim=-1)  # if dims match
-                    # For simplicity, let's only use text_encoder #1:
-                    hidden_states = hidden_states_1
+                    # If you want to combine them, do so here
+                    hidden_states = hidden_states_1  # for simplicity
                     text_encoder_cache.append(hidden_states)
 
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
         train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
 
-        # free memory
         del vae
         if not args.train_text_encoder:
             if text_encoder:   del text_encoder
@@ -480,9 +481,14 @@ def main():
 
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(transformer):
+                # batch is either [latents, text_data] if caching, or a dict if not caching
                 if not args.not_cache_latents:
                     latents, text_data = batch
                     latents = latents.to(accelerator.device, dtype=weight_dtype)
+                    # (We already squeezed dimension inside LatentsDataset, but let's double-check)
+                    if latents.dim() == 5:
+                        latents = latents.squeeze(1)
+
                     bsz = latents.shape[0]
                     noise = torch.randn_like(latents)
                     timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
@@ -490,20 +496,23 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # text_data are input_ids; backprop through text_encoder
+                            # text_data is input_ids
                             hidden_states_1 = text_encoder(text_data)[0] if text_encoder else None
                             hidden_states_2 = text_encoder_2(text_data)[0] if text_encoder_2 else None
-                            hidden_states = hidden_states_1  # or combine if you want
+                            hidden_states = hidden_states_1
                             encoder_hidden_states = hidden_states
                         else:
-                            # text_data is already hidden states from above caching
+                            # text_data = hidden states from caching
                             encoder_hidden_states = text_data
+
                 else:
-                    # not caching latents
+                    # Not caching latents -> compute on the fly
                     pv = batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)
                     ids = batch["input_ids"].to(accelerator.device)
                     latent_dist = vae.encode(pv).latent_dist
                     latents = latent_dist.sample() * 0.18215
+                    if latents.dim() == 5:
+                        latents = latents.squeeze(1)
 
                     bsz = latents.shape[0]
                     noise = torch.randn_like(latents)
@@ -512,32 +521,31 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # aggregator or direct text_encoder
                             hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
                             hidden_states_2 = text_encoder_2(ids)[0] if text_encoder_2 else None
-                            hidden_states = hidden_states_1  # or combine
+                            hidden_states = hidden_states_1
                             encoder_hidden_states = hidden_states
                         else:
-                            # not training => direct single-CLIP call
+                            # Freeze text enc: run once for hidden states
                             hidden_states_1 = text_encoder(ids)[0] if text_encoder else None
                             encoder_hidden_states = hidden_states_1
 
-                # Forward pass
+                # Forward pass in transformer
                 model_pred = transformer(
                     hidden_states=noisy_latents,
                     timestep=timesteps,
                     encoder_hidden_states=encoder_hidden_states,
                 ).sample
 
-                # Target
+                # Depending on scheduler, target
                 if noise_scheduler.config.prediction_type == "epsilon":
                     target = noise
                 elif noise_scheduler.config.prediction_type == "v_prediction":
                     target = noise_scheduler.get_velocity(latents, noise, timesteps)
                 else:
-                    raise ValueError("Unknown prediction_type")
+                    raise ValueError("Unknown prediction type in noise scheduler config.")
 
-                # If prior-preservation, half batch is instance, half is class
+                # If prior-pres, half instance, half class
                 if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
                     half = bsz // 2
                     mp1, mp2 = model_pred[:half], model_pred[half:]
@@ -567,10 +575,7 @@ def main():
     # 10) Final Save
     if accelerator.is_main_process:
         logger.info("** Saving final pipeline weights **")
-        # unwrap
-        unwrapped_transformer = accelerator.unwrap_model(transformer)
-        pipe.transformer = unwrapped_transformer
-
+        pipe.transformer = accelerator.unwrap_model(transformer)
         if args.train_text_encoder:
             pipe.text_encoder = accelerator.unwrap_model(pipe.text_encoder) if pipe.text_encoder else None
             pipe.text_encoder_2 = accelerator.unwrap_model(pipe.text_encoder_2) if pipe.text_encoder_2 else None
