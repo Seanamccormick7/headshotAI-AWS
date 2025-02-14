@@ -38,7 +38,8 @@ def run_training(
         "--prior_loss_weight=1.0",
         "--seed=42",
         "--resolution=512",
-        "--train_batch_size=1", #"--train_text_encoder", uncomment to train text encoder
+        "--train_batch_size=1",
+        "--train_text_encoder",
         "--mixed_precision=fp16",
         "--use_8bit_adam",
         "--gradient_accumulation_steps=1",
