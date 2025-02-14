@@ -293,8 +293,6 @@ def main():
     logger.info("Loading StableDiffusion3Pipeline in float32 for training...")
     pipe = StableDiffusion3Pipeline.from_pretrained(
         args.pretrained_model_name_or_path,
-        text_encoder_3=None,            # drop the T5-XXL
-        tokenizer_3=None,              # drop the T5 tokenizer
         torch_dtype=torch.float32,
         use_auth_token=os.environ.get("HF_TOKEN"),
         safety_checker=None,
