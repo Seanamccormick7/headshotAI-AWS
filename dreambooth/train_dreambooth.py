@@ -138,6 +138,8 @@ class DreamBoothDataset(Dataset):
         instance_data_dir,
         instance_prompt,
         tokenizer,
+        tokenizer_2,
+        tokenizer_3,
         with_prior_preservation=False,
         class_data_dir=None,
         class_prompt=None,
@@ -150,6 +152,8 @@ class DreamBoothDataset(Dataset):
         self.size = size
         self.center_crop = center_crop
         self.tokenizer = tokenizer
+        self.tokenizer_2 = tokenizer_2
+        self.tokenizer_3 = tokenizer_3
         self.with_prior_preservation = with_prior_preservation
         self.instance_prompt = instance_prompt
         self.class_prompt = class_prompt
@@ -404,7 +408,9 @@ def main():
     train_dataset = DreamBoothDataset(
         instance_data_dir=args.instance_data_dir,
         instance_prompt=args.instance_prompt,
-        tokenizer=tokenizer,  # main tokenizer
+        tokenizer=tokenizer,
+        tokenizer_2=tokenizer_2,
+        tokenizer_3=tokenizer_3,
         with_prior_preservation=args.with_prior_preservation,
         class_data_dir=args.class_data_dir,
         class_prompt=args.class_prompt,
