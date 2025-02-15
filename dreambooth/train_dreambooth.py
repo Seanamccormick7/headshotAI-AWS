@@ -19,7 +19,7 @@ from accelerate.utils import set_seed
 from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    DDPMScheduler,
+    DDPMScheduler,  
     StableDiffusion3Pipeline,
     SD3Transformer2DModel,
 )
@@ -533,10 +533,10 @@ def main():
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
-                    # Shape attention masks for CLIP - no need to repeat since prior preservation already doubles the batch
-                    attention_mask_1 = attention_mask_1.view(attention_mask_1.shape[0], 1, 1, attention_mask_1.shape[1]).expand(-1, 1, attention_mask_1.shape[1], -1)
-                    attention_mask_2 = attention_mask_2.view(attention_mask_2.shape[0], 1, 1, attention_mask_2.shape[1]).expand(-1, 1, attention_mask_2.shape[1], -1)
-                    attention_mask_3 = attention_mask_3.view(attention_mask_3.shape[0], 1, 1, attention_mask_3.shape[1]).expand(-1, 1, attention_mask_3.shape[1], -1)
+                    # Add shape logging
+                    logger.info(f"Caching text encoder data with shapes:")
+                    logger.info(f"IDs: {ids_1.shape}, {ids_2.shape}, {ids_3.shape}")
+                    logger.info(f"Masks: {attention_mask_1.shape}, {attention_mask_2.shape}, {attention_mask_3.shape}")
 
                     # Store properly shaped tensors
                     text_encoder_cache.append((
@@ -673,9 +673,18 @@ def main():
 
                             # Encode with attention masks
                             with accelerator.autocast():
+                                logger.info(f"Training with input shapes:")
+                                logger.info(f"IDs: {ids_1.shape}, Mask: {mask_1.shape}")
+                                logger.info(f"IDs: {ids_2.shape}, Mask: {mask_2.shape}")
+                                logger.info(f"IDs: {ids_3.shape}, Mask: {mask_3.shape}")
+
                                 prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1)[0]
                                 prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2)[0]
                                 prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3)[0]
+
+                                logger.info(f"CLIP-L output shape: {prompt_embeds_1.shape}")
+                                logger.info(f"CLIP-G output shape: {prompt_embeds_2.shape}")
+                                logger.info(f"T5 output shape: {prompt_embeds_3.shape}")
 
                             # Ensure embeddings have the same sequence length
                             min_length = min(prompt_embeds_1.shape[1], 
