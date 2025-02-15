@@ -193,29 +193,51 @@ class DreamBoothDataset(Dataset):
         inst_img = Image.open(inst_img_path).convert("RGB")
         example["instance_images"] = self.image_transforms(inst_img)
 
-        # Tokenize instance prompt
-        example["instance_prompt_ids"] = self.tokenizer(
+        # Tokenize with all three tokenizers
+        example["instance_prompt_ids_1"] = self.tokenizer(
             self.instance_prompt,
             padding="do_not_pad",
             truncation=True,
             max_length=self.tokenizer.model_max_length,
         ).input_ids
+        example["instance_prompt_ids_2"] = self.tokenizer_2(
+            self.instance_prompt,
+            padding="do_not_pad",
+            truncation=True,
+            max_length=self.tokenizer_2.model_max_length,
+        ).input_ids
+        example["instance_prompt_ids_3"] = self.tokenizer_3(
+            self.instance_prompt,
+            padding="do_not_pad",
+            truncation=True,
+            max_length=self.tokenizer_3.model_max_length,
+        ).input_ids
 
-        # If prior-preservation
         if self.with_prior_preservation and self.class_images_path:
             cls_img_path = self.class_images_path[idx % self.num_class_images]
             cls_img = Image.open(cls_img_path).convert("RGB")
             example["class_images"] = self.image_transforms(cls_img)
 
-            example["class_prompt_ids"] = self.tokenizer(
+            example["class_prompt_ids_1"] = self.tokenizer(
                 self.class_prompt,
                 padding="do_not_pad",
                 truncation=True,
                 max_length=self.tokenizer.model_max_length,
             ).input_ids
+            example["class_prompt_ids_2"] = self.tokenizer_2(
+                self.class_prompt,
+                padding="do_not_pad",
+                truncation=True,
+                max_length=self.tokenizer_2.model_max_length,
+            ).input_ids
+            example["class_prompt_ids_3"] = self.tokenizer_3(
+                self.class_prompt,
+                padding="do_not_pad",
+                truncation=True,
+                max_length=self.tokenizer_3.model_max_length,
+            ).input_ids
 
         return example
-
 
 class PromptDataset(Dataset):
     """
@@ -394,19 +416,34 @@ def main():
 
     def collate_fn(examples):
         pixel_values = []
-        input_ids_list = []
+        input_ids_1 = []
+        input_ids_2 = []
+        input_ids_3 = []
+        
         for ex in examples:
             pixel_values.append(ex["instance_images"])
-            input_ids_list.append(ex["instance_prompt_ids"])
+            input_ids_1.append(ex["instance_prompt_ids_1"])
+            input_ids_2.append(ex["instance_prompt_ids_2"])
+            input_ids_3.append(ex["instance_prompt_ids_3"])
 
         if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
             pixel_values += [ex["class_images"] for ex in examples]
-            input_ids_list += [ex["class_prompt_ids"] for ex in examples]
+            input_ids_1 += [ex["class_prompt_ids_1"] for ex in examples]
+            input_ids_2 += [ex["class_prompt_ids_2"] for ex in examples]
+            input_ids_3 += [ex["class_prompt_ids_3"] for ex in examples]
 
         pixel_values = torch.stack(pixel_values).float().contiguous()
-        input_ids = tokenizer.pad({"input_ids": input_ids_list}, padding=True, return_tensors="pt").input_ids
+        
+        input_ids_1 = tokenizer.pad({"input_ids": input_ids_1}, padding=True, return_tensors="pt").input_ids
+        input_ids_2 = tokenizer_2.pad({"input_ids": input_ids_2}, padding=True, return_tensors="pt").input_ids
+        input_ids_3 = tokenizer_3.pad({"input_ids": input_ids_3}, padding=True, return_tensors="pt").input_ids
 
-        return {"pixel_values": pixel_values, "input_ids": input_ids}
+        return {
+            "pixel_values": pixel_values,
+            "input_ids_1": input_ids_1,
+            "input_ids_2": input_ids_2,
+            "input_ids_3": input_ids_3
+        }
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -438,49 +475,39 @@ def main():
         for batch in tqdm(train_dataloader, desc="Caching latents"):
             with torch.no_grad():
                 pv = batch["pixel_values"].to(accelerator.device, dtype=weight_dtype)
-                ids = batch["input_ids"].to(accelerator.device)
+                ids_1 = batch["input_ids_1"].to(accelerator.device)
+                ids_2 = batch["input_ids_2"].to(accelerator.device)
+                ids_3 = batch["input_ids_3"].to(accelerator.device)
+                
                 latent_dist = vae.encode(pv).latent_dist
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
-                    text_encoder_cache.append(ids)
+                    text_encoder_cache.append((ids_1, ids_2, ids_3))
                 else:
-                    # Create proper attention mask
-                    attention_mask = (ids != tokenizer.pad_token_id).long()
-                    max_length = min(ids.shape[1], tokenizer.model_max_length)
+                    attention_mask_1 = torch.ones_like(ids_1)
+                    attention_mask_2 = torch.ones_like(ids_2)
+                    attention_mask_3 = torch.ones_like(ids_3)
 
-                    # Process each encoder with proper padding and masking
                     prompt_embeds_1 = text_encoder(
-                        ids[:, :max_length],
-                        attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                        ids_1,
+                        attention_mask=attention_mask_1
                     )[0]
                     prompt_embeds_2 = text_encoder_2(
-                        ids[:, :max_length],
-                        attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                        ids_2,
+                        attention_mask=attention_mask_2
                     )[0]
                     prompt_embeds_3 = text_encoder_3(
-                        ids[:, :max_length],
-                        attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                        ids_3,
+                        attention_mask=attention_mask_3
                     )[0]
 
-                    # Ensure consistent dimensions
-                    target_length = min(
-                        prompt_embeds_1.shape[1],
-                        prompt_embeds_2.shape[1],
-                        prompt_embeds_3.shape[1]
-                    )
-                    
-                    prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
-                    prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
-                    prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
-
-                    # Combine embeddings with proper dimension handling
+                    # Combine embeddings
                     combined_embeds = torch.cat([
                         prompt_embeds_1,
                         prompt_embeds_2,
                         prompt_embeds_3
                     ], dim=-1)
-
                     text_encoder_cache.append(combined_embeds)
 
         from torch.utils.data import DataLoader
@@ -562,31 +589,25 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # Create proper attention mask for training
-                            attention_mask = (text_data != tokenizer.pad_token_id).long()
-                            max_length = min(text_data.shape[1], tokenizer.model_max_length)
+                            attention_mask = torch.ones_like(text_data).to(device=text_data.device)
+                            max_length = tokenizer.model_max_length
 
-                            # Process embeddings with proper padding and attention mask
+                            # Process embeddings with proper padding and masking
                             prompt_embeds_1 = text_encoder(
                                 text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                                attention_mask=attention_mask[:, :max_length]
                             )[0]
                             prompt_embeds_2 = text_encoder_2(
                                 text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                                attention_mask=attention_mask[:, :max_length]
                             )[0]
                             prompt_embeds_3 = text_encoder_3(
                                 text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                                attention_mask=attention_mask[:, :max_length]
                             )[0]
 
                             # Ensure consistent dimensions
-                            target_length = min(
-                                prompt_embeds_1.shape[1],
-                                prompt_embeds_2.shape[1],
-                                prompt_embeds_3.shape[1]
-                            )
-                            
+                            target_length = min(prompt_embeds_1.shape[1], prompt_embeds_2.shape[1], prompt_embeds_3.shape[1])
                             prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
                             prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
                             prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
@@ -615,66 +636,24 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # Create proper attention mask
-                            attention_mask = (ids != tokenizer.pad_token_id).long()
-                            max_length = min(ids.shape[1], tokenizer.model_max_length)
-
-                            # Process embeddings with proper attention mask
-                            prompt_embeds_1 = text_encoder(
-                                ids[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
-                            )[0]
-                            prompt_embeds_2 = text_encoder_2(
-                                ids[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
-                            )[0]
-                            prompt_embeds_3 = text_encoder_3(
-                                ids[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
-                            )[0]
-
-                            # Ensure consistent dimensions
-                            target_length = min(
-                                prompt_embeds_1.shape[1],
-                                prompt_embeds_2.shape[1],
-                                prompt_embeds_3.shape[1]
+                            # aggregator
+                            prompt_embeds = pipe.encode_prompt(
+                                ids,
+                                device=latents.device,
+                                num_images_per_prompt=1,
+                                do_classifier_free_guidance=False,
+                                max_sequence_length=256
                             )
-                            
-                            prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
-                            prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
-                            prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
-
-                            # Combine embeddings
-                            encoder_hidden_states = torch.cat([
-                                prompt_embeds_1,
-                                prompt_embeds_2,
-                                prompt_embeds_3
-                            ], dim=-1)
+                            encoder_hidden_states = prompt_embeds
                         else:
-                            # Create proper attention mask for frozen encoders
-                            attention_mask = (ids != tokenizer.pad_token_id).long()
-                            max_length = min(ids.shape[1], tokenizer.model_max_length)
-
-                            # Process embeddings with proper attention mask
-                            prompt_embeds_1 = text_encoder(
-                                ids[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
-                            )[0]
-                            prompt_embeds_2 = text_encoder_2(
-                                ids[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
-                            )[0]
-                            prompt_embeds_3 = text_encoder_3(
-                                ids[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
-                            )[0]
-
-                            # Combine embeddings
-                            encoder_hidden_states = torch.cat([
-                                prompt_embeds_1,
-                                prompt_embeds_2,
-                                prompt_embeds_3
-                            ], dim=-1)
+                            # aggregator but text enc. is frozen
+                            encoder_hidden_states = pipe.encode_prompt(
+                                ids,
+                                device=latents.device,
+                                num_images_per_prompt=1,
+                                do_classifier_free_guidance=False,
+                                max_sequence_length=256
+                            )
 
                 # Forward pass in the "transformer"
                 model_pred = transformer(
