@@ -70,6 +70,9 @@ def generate_images_task(self, req_data: dict):
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
             f"wearing {attire}, in a {backgrounds} setting."
         )
+        
+        # Define class prompt - make it more generic than the instance prompt
+        class_prompt = f"Photo of a person"
 
         # 4) Set the training steps
         training_steps = 200
@@ -83,7 +86,9 @@ def generate_images_task(self, req_data: dict):
             instance_prompt=instance_prompt,
             steps=training_steps,
             output_dir=output_dir,
-            sample_prompt=sample_prompt
+            sample_prompt=sample_prompt,
+            class_prompt=class_prompt,
+            class_data_dir="class_images"  # Use the class_images directory
         )
         print("DreamBooth training output:", train_output)
 

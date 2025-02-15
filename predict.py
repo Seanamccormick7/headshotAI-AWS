@@ -13,7 +13,9 @@ def run_training(
     sample_negative_prompt: str = "",
     n_save_sample: int = 2,
     save_guidance_scale: float = 7.5,
-    save_infer_steps: int = 20
+    save_infer_steps: int = 20,
+    class_prompt: str = None,  # Added class prompt parameter
+    class_data_dir: str = None  # Added class data directory parameter
 ) -> str:
     """Main training function without Cog dependencies."""
 
@@ -30,7 +32,7 @@ def run_training(
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-medium",
-        "--with_prior_preservation",              # Keep if you want prior-preservation
+        "--with_prior_preservation",
         "--prior_loss_weight=1.0",
         "--seed=42",
         "--resolution=512",
@@ -43,23 +45,29 @@ def run_training(
         "--learning_rate=1e-6",
         "--lr_scheduler=constant",
         "--lr_warmup_steps=0",
-        "--num_class_images=15",  # for prior-preservation
+        "--num_class_images=50",
         "--sample_batch_size=1",
         f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
-        "--train_batch_size=1",
     ]
+
+    # Add class-related arguments if provided
+    if class_data_dir and class_prompt:
+        cmd.extend([
+            f"--class_data_dir={class_data_dir}",
+            f"--class_prompt={class_prompt}"
+        ])
 
     # If we want to save sample images after training, pass the sample args
     if sample_prompt:
-        cmd += [
+        cmd.extend([
             f"--save_sample_prompt={sample_prompt}",
             f"--n_save_sample={n_save_sample}",
             f"--save_guidance_scale={save_guidance_scale}",
             f"--save_infer_steps={save_infer_steps}",
-        ]
+        ])
         if sample_negative_prompt:
             cmd.append(f"--save_sample_negative_prompt={sample_negative_prompt}")
 
