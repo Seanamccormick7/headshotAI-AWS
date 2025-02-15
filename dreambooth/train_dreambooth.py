@@ -425,30 +425,70 @@ def main():
         input_ids_1 = []
         input_ids_2 = []
         input_ids_3 = []
+        attention_masks_1 = []
+        attention_masks_2 = []
+        attention_masks_3 = []
         
         for ex in examples:
             pixel_values.append(ex["instance_images"])
-            input_ids_1.append(ex["instance_prompt_ids_1"])
-            input_ids_2.append(ex["instance_prompt_ids_2"])
-            input_ids_3.append(ex["instance_prompt_ids_3"])
+            
+            # Create attention masks based on input_ids length
+            ids_1 = ex["instance_prompt_ids_1"]
+            ids_2 = ex["instance_prompt_ids_2"]
+            ids_3 = ex["instance_prompt_ids_3"]
+            
+            input_ids_1.append(ids_1)
+            input_ids_2.append(ids_2)
+            input_ids_3.append(ids_3)
+            
+            # Create attention masks (1s for tokens, 0s for padding)
+            attention_masks_1.append([1] * len(ids_1))
+            attention_masks_2.append([1] * len(ids_2))
+            attention_masks_3.append([1] * len(ids_3))
 
-        if args.with_prior_preservation and args.class_data_dir and args.class_prompt:
-            pixel_values += [ex["class_images"] for ex in examples]
-            input_ids_1 += [ex["class_prompt_ids_1"] for ex in examples]
-            input_ids_2 += [ex["class_prompt_ids_2"] for ex in examples]
-            input_ids_3 += [ex["class_prompt_ids_3"] for ex in examples]
+        if args.with_prior_preservation:
+            for ex in examples:
+                pixel_values.append(ex["class_images"])
+                
+                ids_1 = ex["class_prompt_ids_1"]
+                ids_2 = ex["class_prompt_ids_2"]
+                ids_3 = ex["class_prompt_ids_3"]
+                
+                input_ids_1.append(ids_1)
+                input_ids_2.append(ids_2)
+                input_ids_3.append(ids_3)
+                
+                attention_masks_1.append([1] * len(ids_1))
+                attention_masks_2.append([1] * len(ids_2))
+                attention_masks_3.append([1] * len(ids_3))
 
-        pixel_values = torch.stack(pixel_values).float().contiguous()
+        pixel_values = torch.stack(pixel_values).float()
         
-        input_ids_1 = tokenizer.pad({"input_ids": input_ids_1}, padding=True, return_tensors="pt").input_ids
-        input_ids_2 = tokenizer_2.pad({"input_ids": input_ids_2}, padding=True, return_tensors="pt").input_ids
-        input_ids_3 = tokenizer_3.pad({"input_ids": input_ids_3}, padding=True, return_tensors="pt").input_ids
+        # Pad inputs and create attention masks
+        padded_1 = tokenizer.pad(
+            {"input_ids": input_ids_1, "attention_mask": attention_masks_1}, 
+            padding=True, 
+            return_tensors="pt"
+        )
+        padded_2 = tokenizer_2.pad(
+            {"input_ids": input_ids_2, "attention_mask": attention_masks_2}, 
+            padding=True, 
+            return_tensors="pt"
+        )
+        padded_3 = tokenizer_3.pad(
+            {"input_ids": input_ids_3, "attention_mask": attention_masks_3}, 
+            padding=True, 
+            return_tensors="pt"
+        )
 
         return {
             "pixel_values": pixel_values,
-            "input_ids_1": input_ids_1,
-            "input_ids_2": input_ids_2,
-            "input_ids_3": input_ids_3
+            "input_ids_1": padded_1["input_ids"],
+            "input_ids_2": padded_2["input_ids"],
+            "input_ids_3": padded_3["input_ids"],
+            "attention_mask_1": padded_1["attention_mask"],
+            "attention_mask_2": padded_2["attention_mask"],
+            "attention_mask_3": padded_3["attention_mask"]
         }
 
     train_dataloader = torch.utils.data.DataLoader(
@@ -485,16 +525,21 @@ def main():
                 ids_2 = batch["input_ids_2"].to(accelerator.device)
                 ids_3 = batch["input_ids_3"].to(accelerator.device)
                 
+                # Important: Use the correct attention masks
+                attention_mask_1 = batch["attention_mask_1"].to(accelerator.device)
+                attention_mask_2 = batch["attention_mask_2"].to(accelerator.device)
+                attention_mask_3 = batch["attention_mask_3"].to(accelerator.device)
+                
                 latent_dist = vae.encode(pv).latent_dist
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
-                    text_encoder_cache.append((ids_1, ids_2, ids_3))
+                    text_encoder_cache.append((
+                        (ids_1, attention_mask_1),
+                        (ids_2, attention_mask_2),
+                        (ids_3, attention_mask_3)
+                    ))
                 else:
-                    attention_mask_1 = torch.ones_like(ids_1)
-                    attention_mask_2 = torch.ones_like(ids_2)
-                    attention_mask_3 = torch.ones_like(ids_3)
-
                     prompt_embeds_1 = text_encoder(
                         ids_1,
                         attention_mask=attention_mask_1
@@ -508,7 +553,17 @@ def main():
                         attention_mask=attention_mask_3
                     )[0]
 
-                    # Combine embeddings
+                    # Ensure all embeddings have the same sequence length
+                    min_length = min(
+                        prompt_embeds_1.shape[1],
+                        prompt_embeds_2.shape[1],
+                        prompt_embeds_3.shape[1]
+                    )
+                    prompt_embeds_1 = prompt_embeds_1[:, :min_length, :]
+                    prompt_embeds_2 = prompt_embeds_2[:, :min_length, :]
+                    prompt_embeds_3 = prompt_embeds_3[:, :min_length, :]
+
+                    # Combine embeddings along the hidden dimension
                     combined_embeds = torch.cat([
                         prompt_embeds_1,
                         prompt_embeds_2,
