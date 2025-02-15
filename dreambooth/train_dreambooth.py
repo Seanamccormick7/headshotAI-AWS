@@ -311,11 +311,7 @@ def main():
         revision=args.revision
     )
 
-    # Log tokenizer max lengths for debugging
-    logger.info(f"Tokenizer max lengths: {tokenizer.model_max_length}, "
-                f"{tokenizer_2.model_max_length}, {tokenizer_3.model_max_length}")
-
-    # Modified section for handling multiple encoders
+    # First assign all the components
     vae = pipe.vae
     text_encoder = pipe.text_encoder
     text_encoder_2 = pipe.text_encoder_2
@@ -325,12 +321,18 @@ def main():
     tokenizer_2 = pipe.tokenizer_2
     tokenizer_3 = pipe.tokenizer_3
 
+    # Now we can safely log the tokenizer information
+    logger.info(f"Tokenizer max lengths: {tokenizer.model_max_length}, "
+                f"{tokenizer_2.model_max_length}, {tokenizer_3.model_max_length}")
+
+    # Set requires_grad for the models
     vae.requires_grad_(False)
     if not args.train_text_encoder:
         text_encoder.requires_grad_(False)
         text_encoder_2.requires_grad_(False)
         text_encoder_3.requires_grad_(False)
 
+    # Enable optimizations
     if is_xformers_available():
         vae.enable_xformers_memory_efficient_attention()
         transformer.enable_xformers_memory_efficient_attention()
@@ -342,9 +344,11 @@ def main():
             text_encoder_2.gradient_checkpointing_enable()
             text_encoder_3.gradient_checkpointing_enable()
 
+    # Scale learning rate if needed
     if args.scale_lr:
         args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+            args.learning_rate * args.gradient_accumulation_steps * 
+            args.train_batch_size * accelerator.num_processes
         )
 
     # Setup optimizer
