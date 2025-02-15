@@ -533,7 +533,12 @@ def main():
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
-                    # Store input IDs and attention masks together
+                    # Ensure attention masks have correct shape before caching
+                    attention_mask_1 = attention_mask_1.view(ids_1.shape[0], -1)[:, :ids_1.shape[1]]
+                    attention_mask_2 = attention_mask_2.view(ids_2.shape[0], -1)[:, :ids_2.shape[1]]
+                    attention_mask_3 = attention_mask_3.view(ids_3.shape[0], -1)[:, :ids_3.shape[1]]
+
+                    # Store properly shaped tensors
                     text_encoder_cache.append((
                         (ids_1, attention_mask_1),
                         (ids_2, attention_mask_2),
@@ -643,7 +648,7 @@ def main():
                         if args.train_text_encoder:
                             # text_data is a tuple of tuples: ((ids_1, mask_1), (ids_2, mask_2), (ids_3, mask_3))
                             (ids_1, mask_1), (ids_2, mask_2), (ids_3, mask_3) = text_data
-                            
+
                             # Convert lists to tensors if needed
                             if not isinstance(ids_1, torch.Tensor):
                                 ids_1 = torch.tensor(ids_1, device=latents.device)
@@ -653,10 +658,24 @@ def main():
                                 mask_2 = torch.tensor(mask_2, device=latents.device)
                                 mask_3 = torch.tensor(mask_3, device=latents.device)
 
+                            # Ensure masks have correct shape [batch_size, sequence_length]
+                            if len(mask_1.shape) != 2:
+                                mask_1 = mask_1.view(ids_1.shape[0], -1)
+                            if len(mask_2.shape) != 2:
+                                mask_2 = mask_2.view(ids_2.shape[0], -1)
+                            if len(mask_3.shape) != 2:
+                                mask_3 = mask_3.view(ids_3.shape[0], -1)
+
+                            # Ensure masks have same sequence length as input ids
+                            mask_1 = mask_1[:, :ids_1.shape[1]]
+                            mask_2 = mask_2[:, :ids_2.shape[1]]
+                            mask_3 = mask_3[:, :ids_3.shape[1]]
+
                             # Encode with attention masks
-                            prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1)[0]
-                            prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2)[0]
-                            prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3)[0]
+                            with accelerator.autocast():
+                                prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1)[0]
+                                prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2)[0]
+                                prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3)[0]
 
                             # Ensure embeddings have the same sequence length
                             min_length = min(prompt_embeds_1.shape[1], 
