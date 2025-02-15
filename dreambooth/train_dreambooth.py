@@ -525,7 +525,6 @@ def main():
                 ids_2 = batch["input_ids_2"].to(accelerator.device)
                 ids_3 = batch["input_ids_3"].to(accelerator.device)
                 
-                # Important: Use the correct attention masks
                 attention_mask_1 = batch["attention_mask_1"].to(accelerator.device)
                 attention_mask_2 = batch["attention_mask_2"].to(accelerator.device)
                 attention_mask_3 = batch["attention_mask_3"].to(accelerator.device)
@@ -534,24 +533,16 @@ def main():
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
+                    # Store input IDs and attention masks together
                     text_encoder_cache.append((
                         (ids_1, attention_mask_1),
                         (ids_2, attention_mask_2),
                         (ids_3, attention_mask_3)
                     ))
                 else:
-                    prompt_embeds_1 = text_encoder(
-                        ids_1,
-                        attention_mask=attention_mask_1
-                    )[0]
-                    prompt_embeds_2 = text_encoder_2(
-                        ids_2,
-                        attention_mask=attention_mask_2
-                    )[0]
-                    prompt_embeds_3 = text_encoder_3(
-                        ids_3,
-                        attention_mask=attention_mask_3
-                    )[0]
+                    prompt_embeds_1 = text_encoder(ids_1, attention_mask=attention_mask_1)[0]
+                    prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=attention_mask_2)[0]
+                    prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=attention_mask_3)[0]
 
                     # Ensure all embeddings have the same sequence length
                     min_length = min(
@@ -650,37 +641,45 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # text_data is a tuple: (ids_1, ids_2, ids_3)
-                            ids_1, ids_2, ids_3 = text_data
+                            # text_data is a tuple of tuples: ((ids_1, mask_1), (ids_2, mask_2), (ids_3, mask_3))
+                            (ids_1, mask_1), (ids_2, mask_2), (ids_3, mask_3) = text_data
+                            
+                            # Convert lists to tensors if needed
+                            if not isinstance(ids_1, torch.Tensor):
+                                ids_1 = torch.tensor(ids_1, device=latents.device)
+                                ids_2 = torch.tensor(ids_2, device=latents.device)
+                                ids_3 = torch.tensor(ids_3, device=latents.device)
+                                mask_1 = torch.tensor(mask_1, device=latents.device)
+                                mask_2 = torch.tensor(mask_2, device=latents.device)
+                                mask_3 = torch.tensor(mask_3, device=latents.device)
 
-                            # Build an attention mask for each tensor
-                            attn_1 = torch.ones_like(ids_1, dtype=torch.long)
-                            attn_2 = torch.ones_like(ids_2, dtype=torch.long)
-                            attn_3 = torch.ones_like(ids_3, dtype=torch.long)
+                            # Encode with attention masks
+                            prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1)[0]
+                            prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2)[0]
+                            prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3)[0]
 
-                            # Encode
-                            prompt_embeds_1 = text_encoder(ids_1, attention_mask=attn_1)[0]
-                            prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=attn_2)[0]
-                            prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=attn_3)[0]
+                            # Ensure embeddings have the same sequence length
+                            min_length = min(prompt_embeds_1.shape[1], 
+                                        prompt_embeds_2.shape[1],
+                                        prompt_embeds_3.shape[1])
+                            prompt_embeds_1 = prompt_embeds_1[:, :min_length, :]
+                            prompt_embeds_2 = prompt_embeds_2[:, :min_length, :]
+                            prompt_embeds_3 = prompt_embeds_3[:, :min_length, :]
 
-                            # (Optional) Pad/crop them to the same length
-                            target_length = min(
-                                prompt_embeds_1.shape[1],
-                                prompt_embeds_2.shape[1],
-                                prompt_embeds_3.shape[1],
-                            )
-                            prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
-                            prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
-                            prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
-
-                            # Finally, combine them into a single hidden_states tensor
+                            # Combine embeddings
                             encoder_hidden_states = torch.cat(
                                 [prompt_embeds_1, prompt_embeds_2, prompt_embeds_3],
                                 dim=-1
                             )
                         else:
-                            # If text encoder is not trained, `text_data` already contains final embeddings
+                            # If text encoder is not trained, text_data already contains final embeddings
                             encoder_hidden_states = text_data
+                            if not isinstance(encoder_hidden_states, torch.Tensor):
+                                encoder_hidden_states = torch.tensor(
+                                    encoder_hidden_states, 
+                                    device=latents.device,
+                                    dtype=torch.float32
+                                )
 
                 else:
                     # not caching latents
