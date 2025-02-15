@@ -445,27 +445,30 @@ def main():
                 if args.train_text_encoder:
                     text_encoder_cache.append(ids)
                 else:
-                    # Get embeddings with proper padding and masking
-                    attention_mask = torch.ones_like(ids)
-                    max_length = tokenizer.model_max_length
+                    # Create proper attention mask
+                    attention_mask = (ids != tokenizer.pad_token_id).long()
+                    max_length = min(ids.shape[1], tokenizer.model_max_length)
 
-                    # Process each encoder with proper padding
+                    # Process each encoder with proper padding and masking
                     prompt_embeds_1 = text_encoder(
                         ids[:, :max_length],
-                        attention_mask=attention_mask[:, :max_length]
+                        attention_mask=attention_mask[:, :max_length].unsqueeze(0)
                     )[0]
                     prompt_embeds_2 = text_encoder_2(
                         ids[:, :max_length],
-                        attention_mask=attention_mask[:, :max_length]
+                        attention_mask=attention_mask[:, :max_length].unsqueeze(0)
                     )[0]
                     prompt_embeds_3 = text_encoder_3(
                         ids[:, :max_length],
-                        attention_mask=attention_mask[:, :max_length]
+                        attention_mask=attention_mask[:, :max_length].unsqueeze(0)
                     )[0]
 
-                    # Ensure all embeddings have the same size before concatenating
-                    hidden_size = prompt_embeds_1.shape[-1]
-                    target_length = min(prompt_embeds_1.shape[1], prompt_embeds_2.shape[1], prompt_embeds_3.shape[1])
+                    # Ensure consistent dimensions
+                    target_length = min(
+                        prompt_embeds_1.shape[1],
+                        prompt_embeds_2.shape[1],
+                        prompt_embeds_3.shape[1]
+                    )
                     
                     prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
                     prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
@@ -559,25 +562,31 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            attention_mask = torch.ones_like(text_data).to(device=text_data.device)
-                            max_length = tokenizer.model_max_length
+                            # Create proper attention mask for training
+                            attention_mask = (text_data != tokenizer.pad_token_id).long()
+                            max_length = min(text_data.shape[1], tokenizer.model_max_length)
 
-                            # Process embeddings with proper padding and masking
+                            # Process embeddings with proper padding and attention mask
                             prompt_embeds_1 = text_encoder(
                                 text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length]
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
                             )[0]
                             prompt_embeds_2 = text_encoder_2(
                                 text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length]
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
                             )[0]
                             prompt_embeds_3 = text_encoder_3(
                                 text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length]
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
                             )[0]
 
                             # Ensure consistent dimensions
-                            target_length = min(prompt_embeds_1.shape[1], prompt_embeds_2.shape[1], prompt_embeds_3.shape[1])
+                            target_length = min(
+                                prompt_embeds_1.shape[1],
+                                prompt_embeds_2.shape[1],
+                                prompt_embeds_3.shape[1]
+                            )
+                            
                             prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
                             prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
                             prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
@@ -606,24 +615,66 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # aggregator
-                            prompt_embeds = pipe.encode_prompt(
-                                ids,
-                                device=latents.device,
-                                num_images_per_prompt=1,
-                                do_classifier_free_guidance=False,
-                                max_sequence_length=256
+                            # Create proper attention mask
+                            attention_mask = (ids != tokenizer.pad_token_id).long()
+                            max_length = min(ids.shape[1], tokenizer.model_max_length)
+
+                            # Process embeddings with proper attention mask
+                            prompt_embeds_1 = text_encoder(
+                                ids[:, :max_length],
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                            )[0]
+                            prompt_embeds_2 = text_encoder_2(
+                                ids[:, :max_length],
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                            )[0]
+                            prompt_embeds_3 = text_encoder_3(
+                                ids[:, :max_length],
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                            )[0]
+
+                            # Ensure consistent dimensions
+                            target_length = min(
+                                prompt_embeds_1.shape[1],
+                                prompt_embeds_2.shape[1],
+                                prompt_embeds_3.shape[1]
                             )
-                            encoder_hidden_states = prompt_embeds
+                            
+                            prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
+                            prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
+                            prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
+
+                            # Combine embeddings
+                            encoder_hidden_states = torch.cat([
+                                prompt_embeds_1,
+                                prompt_embeds_2,
+                                prompt_embeds_3
+                            ], dim=-1)
                         else:
-                            # aggregator but text enc. is frozen
-                            encoder_hidden_states = pipe.encode_prompt(
-                                ids,
-                                device=latents.device,
-                                num_images_per_prompt=1,
-                                do_classifier_free_guidance=False,
-                                max_sequence_length=256
-                            )
+                            # Create proper attention mask for frozen encoders
+                            attention_mask = (ids != tokenizer.pad_token_id).long()
+                            max_length = min(ids.shape[1], tokenizer.model_max_length)
+
+                            # Process embeddings with proper attention mask
+                            prompt_embeds_1 = text_encoder(
+                                ids[:, :max_length],
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                            )[0]
+                            prompt_embeds_2 = text_encoder_2(
+                                ids[:, :max_length],
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                            )[0]
+                            prompt_embeds_3 = text_encoder_3(
+                                ids[:, :max_length],
+                                attention_mask=attention_mask[:, :max_length].unsqueeze(0)
+                            )[0]
+
+                            # Combine embeddings
+                            encoder_hidden_states = torch.cat([
+                                prompt_embeds_1,
+                                prompt_embeds_2,
+                                prompt_embeds_3
+                            ], dim=-1)
 
                 # Forward pass in the "transformer"
                 model_pred = transformer(
