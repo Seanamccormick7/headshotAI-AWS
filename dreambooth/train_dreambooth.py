@@ -299,20 +299,21 @@ def main():
         revision=args.revision
     )
 
+    # Modified section for handling multiple encoders
     vae = pipe.vae
     text_encoder = pipe.text_encoder
     text_encoder_2 = pipe.text_encoder_2
-    text_encoder_3 = pipe.text_encoder_3  # newly added line
+    text_encoder_3 = pipe.text_encoder_3
     transformer = pipe.transformer
     tokenizer = pipe.tokenizer
     tokenizer_2 = pipe.tokenizer_2
-    tokenizer_3 = pipe.tokenizer_3  # newly added line
+    tokenizer_3 = pipe.tokenizer_3
 
     vae.requires_grad_(False)
     if not args.train_text_encoder:
-        if text_encoder:   text_encoder.requires_grad_(False)
-        if text_encoder_2: text_encoder_2.requires_grad_(False)
-        if text_encoder_3: text_encoder_3.requires_grad_(False)
+        text_encoder.requires_grad_(False)
+        text_encoder_2.requires_grad_(False)
+        text_encoder_3.requires_grad_(False)
 
     if is_xformers_available():
         vae.enable_xformers_memory_efficient_attention()
@@ -321,9 +322,9 @@ def main():
     if args.gradient_checkpointing:
         transformer.enable_gradient_checkpointing()
         if args.train_text_encoder:
-            if text_encoder:   text_encoder.gradient_checkpointing_enable()
-            if text_encoder_2: text_encoder_2.gradient_checkpointing_enable()
-            if text_encoder_3: text_encoder_3.gradient_checkpointing_enable()
+            text_encoder.gradient_checkpointing_enable()
+            text_encoder_2.gradient_checkpointing_enable()
+            text_encoder_3.gradient_checkpointing_enable()
 
     if args.scale_lr:
         args.learning_rate = (
@@ -424,17 +425,19 @@ def main():
                 if args.train_text_encoder:
                     text_encoder_cache.append(ids)
                 else:
-                    # we call pipeline.encode_prompt(...) if we wanted the multi-encoder aggregator
-                    # but for simplicity, let's call text_encoder(...) for single CLIP. Or do the aggregator if needed.
-                    # If you want the aggregator, do:
-                    prompt_embeds = pipe.encode_prompt(
-                        ids,
-                        device=accelerator.device,
-                        num_images_per_prompt=1,
-                        do_classifier_free_guidance=False,
-                        max_sequence_length=256  # for T5
-                    )
-                    text_encoder_cache.append(prompt_embeds)
+                    # Modified section for handling multiple encoders
+                    prompt_embeds_1 = text_encoder(ids)[0]
+                    prompt_embeds_2 = text_encoder_2(ids)[0]
+                    prompt_embeds_3 = text_encoder_3(ids)[0]
+                    
+                    # Combine the embeddings - normalize if needed
+                    combined_embeds = torch.cat([
+                        prompt_embeds_1,
+                        prompt_embeds_2,
+                        prompt_embeds_3
+                    ], dim=-1)
+                    
+                    text_encoder_cache.append(combined_embeds)
 
         from torch.utils.data import DataLoader
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
@@ -461,7 +464,15 @@ def main():
     # 6) Prepare models + data with accelerator
     objs_to_prepare = [transformer, optimizer, train_dataloader, lr_scheduler]
     if args.train_text_encoder:
-        objs_to_prepare = [transformer, text_encoder, text_encoder_2, text_encoder_3, optimizer, train_dataloader, lr_scheduler]
+        objs_to_prepare = [
+            transformer,
+            text_encoder,
+            text_encoder_2,
+            text_encoder_3,
+            optimizer,
+            train_dataloader,
+            lr_scheduler
+        ]
 
     prepared = accelerator.prepare(*objs_to_prepare)
     idx = 0
@@ -492,14 +503,12 @@ def main():
     for epoch in range(9999999):
         transformer.train()
         if args.train_text_encoder:
-            if text_encoder:   text_encoder.train()
-            if text_encoder_2: text_encoder_2.train()
-            if text_encoder_3: text_encoder_3.train()
+            text_encoder.train()
+            text_encoder_2.train()
+            text_encoder_3.train()
 
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(transformer):
-                # If latents are cached, batch = [ latents, text_data ]
-                # If not cached, batch = { "pixel_values", "input_ids" }
                 if not args.not_cache_latents:
                     latents, text_data = batch
                     bsz = latents.shape[0]
@@ -509,20 +518,18 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            # text_data is input_ids
-                            # we call pipe.encode_prompt with the aggregator?
-                            # Or do text_encoder(...) if you only want single-CLIP.
-                            # We'll do aggregator for multi-encoder:
-                            prompt_embeds = pipe.encode_prompt(
-                                text_data,  # input_ids
-                                device=latents.device,
-                                num_images_per_prompt=1,
-                                do_classifier_free_guidance=False,
-                                max_sequence_length=256
-                            )
-                            encoder_hidden_states = prompt_embeds
+                            # Modified section for training text encoders
+                            prompt_embeds_1 = text_encoder(text_data)[0]
+                            prompt_embeds_2 = text_encoder_2(text_data)[0]
+                            prompt_embeds_3 = text_encoder_3(text_data)[0]
+                            
+                            encoder_hidden_states = torch.cat([
+                                prompt_embeds_1,
+                                prompt_embeds_2,
+                                prompt_embeds_3
+                            ], dim=-1)
                         else:
-                            # text_data is already "prompt_embeds" if we stored them
+                            # When using cached embeddings
                             encoder_hidden_states = text_data
 
                 else:
