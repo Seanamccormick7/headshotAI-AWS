@@ -689,9 +689,9 @@ def main():
                                 logger.info(f"IDs: {ids_2.shape}, Mask: {mask_2.shape}")
                                 logger.info(f"IDs: {ids_3.shape}, Mask: {mask_3.shape}")
 
-                                prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1)[0]
-                                prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2)[0]
-                                prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3)[0]
+                                prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1).last_hidden_state
+                                prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2).last_hidden_state
+                                prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3).last_hidden_state
 
                                 logger.info(f"CLIP-L output shape: {prompt_embeds_1.shape}")
                                 logger.info(f"CLIP-G output shape: {prompt_embeds_2.shape}")
