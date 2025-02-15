@@ -595,37 +595,36 @@ def main():
 
                     with text_enc_context:
                         if args.train_text_encoder:
-                            attention_mask = torch.ones_like(text_data).to(device=text_data.device)
-                            max_length = tokenizer.model_max_length
+                            # text_data is a tuple: (ids_1, ids_2, ids_3)
+                            ids_1, ids_2, ids_3 = text_data
 
-                            # Process embeddings with proper padding and masking
-                            prompt_embeds_1 = text_encoder(
-                                text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length]
-                            )[0]
-                            prompt_embeds_2 = text_encoder_2(
-                                text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length]
-                            )[0]
-                            prompt_embeds_3 = text_encoder_3(
-                                text_data[:, :max_length],
-                                attention_mask=attention_mask[:, :max_length]
-                            )[0]
+                            # Build an attention mask for each tensor
+                            attn_1 = torch.ones_like(ids_1, dtype=torch.long)
+                            attn_2 = torch.ones_like(ids_2, dtype=torch.long)
+                            attn_3 = torch.ones_like(ids_3, dtype=torch.long)
 
-                            # Ensure consistent dimensions
-                            target_length = min(prompt_embeds_1.shape[1], prompt_embeds_2.shape[1], prompt_embeds_3.shape[1])
+                            # Encode
+                            prompt_embeds_1 = text_encoder(ids_1, attention_mask=attn_1)[0]
+                            prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=attn_2)[0]
+                            prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=attn_3)[0]
+
+                            # (Optional) Pad/crop them to the same length
+                            target_length = min(
+                                prompt_embeds_1.shape[1],
+                                prompt_embeds_2.shape[1],
+                                prompt_embeds_3.shape[1],
+                            )
                             prompt_embeds_1 = prompt_embeds_1[:, :target_length, :]
                             prompt_embeds_2 = prompt_embeds_2[:, :target_length, :]
                             prompt_embeds_3 = prompt_embeds_3[:, :target_length, :]
 
-                            # Combine embeddings
-                            encoder_hidden_states = torch.cat([
-                                prompt_embeds_1,
-                                prompt_embeds_2,
-                                prompt_embeds_3
-                            ], dim=-1)
+                            # Finally, combine them into a single hidden_states tensor
+                            encoder_hidden_states = torch.cat(
+                                [prompt_embeds_1, prompt_embeds_2, prompt_embeds_3],
+                                dim=-1
+                            )
                         else:
-                            # When using cached embeddings
+                            # If text encoder is not trained, `text_data` already contains final embeddings
                             encoder_hidden_states = text_data
 
                 else:
