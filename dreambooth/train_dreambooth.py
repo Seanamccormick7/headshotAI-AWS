@@ -19,7 +19,7 @@ from accelerate.utils import set_seed
 from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    DDPMScheduler,  
+    DDPMScheduler,
     StableDiffusion3Pipeline,
     SD3Transformer2DModel,
 )
@@ -533,10 +533,10 @@ def main():
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
-                    # Add shape logging
-                    logger.info(f"Caching text encoder data with shapes:")
-                    logger.info(f"IDs: {ids_1.shape}, {ids_2.shape}, {ids_3.shape}")
-                    logger.info(f"Masks: {attention_mask_1.shape}, {attention_mask_2.shape}, {attention_mask_3.shape}")
+                    # Shape attention masks for CLIP - no need to repeat since prior preservation already doubles the batch
+                    attention_mask_1 = attention_mask_1.view(attention_mask_1.shape[0], 1, 1, attention_mask_1.shape[1]).expand(-1, 1, attention_mask_1.shape[1], -1)
+                    attention_mask_2 = attention_mask_2.view(attention_mask_2.shape[0], 1, 1, attention_mask_2.shape[1]).expand(-1, 1, attention_mask_2.shape[1], -1)
+                    attention_mask_3 = attention_mask_3.view(attention_mask_3.shape[0], 1, 1, attention_mask_3.shape[1]).expand(-1, 1, attention_mask_3.shape[1], -1)
 
                     # Store properly shaped tensors
                     text_encoder_cache.append((
@@ -569,12 +569,7 @@ def main():
 
         from torch.utils.data import DataLoader
         train_dataset = LatentsDataset(latents_cache, text_encoder_cache)
-        train_dataloader = DataLoader(
-            train_dataset,
-            batch_size=1,
-            shuffle=True,
-            collate_fn=lambda batch: batch[0]  # Avoid adding extra batch dimension
-        )
+        train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True)
 
         # free memory
         del vae
@@ -665,17 +660,11 @@ def main():
 
                             # Ensure masks have correct shape [batch_size, sequence_length]
                             if len(mask_1.shape) != 2:
-                                mask_1 = mask_1.squeeze(0)  # Remove extra batch dimension if present
-                            mask_1 = mask_1.view(bsz, -1)  # Use actual batch size (bsz) from latents
-                            mask_1 = mask_1[:, :ids_1.shape[1]]
-                            if len(mask_2.shape) != 2: 
-                                mask_2 = mask_1.squeeze(0)  # Remove extra batch dimension if present
-                            mask_2 = mask_2.view(bsz, -1)  # Use actual batch size (bsz) from latents
-                            mask_2 = mask_2[:, :ids_2.shape[1]]
+                                mask_1 = mask_1.view(ids_1.shape[0], -1)
+                            if len(mask_2.shape) != 2:
+                                mask_2 = mask_2.view(ids_2.shape[0], -1)
                             if len(mask_3.shape) != 2:
-                                mask_3 = mask_3.squeeze(0)  # Remove extra batch dimension if present
-                            mask_3 = mask_3.view(bsz, -1)  # Use actual batch size (bsz) from latents
-                            mask_3 = mask_3[:, :ids_3.shape[1]]
+                                mask_3 = mask_3.view(ids_3.shape[0], -1)
 
                             # Ensure masks have same sequence length as input ids
                             mask_1 = mask_1[:, :ids_1.shape[1]]
@@ -684,18 +673,32 @@ def main():
 
                             # Encode with attention masks
                             with accelerator.autocast():
-                                logger.info(f"Training with input shapes:")
-                                logger.info(f"IDs: {ids_1.shape}, Mask: {mask_1.shape}")
-                                logger.info(f"IDs: {ids_2.shape}, Mask: {mask_2.shape}")
-                                logger.info(f"IDs: {ids_3.shape}, Mask: {mask_3.shape}")
+                                text_outputs_1 = text_encoder(ids_1, attention_mask=mask_1, output_hidden_states=True)
+                                text_outputs_2 = text_encoder_2(ids_2, attention_mask=mask_2, output_hidden_states=True)
+                                text_outputs_3 = text_encoder_3(ids_3, attention_mask=mask_3, output_hidden_states=True)
 
-                                prompt_embeds_1 = text_encoder(ids_1, attention_mask=mask_1).last_hidden_state
-                                prompt_embeds_2 = text_encoder_2(ids_2, attention_mask=mask_2).last_hidden_state
-                                prompt_embeds_3 = text_encoder_3(ids_3, attention_mask=mask_3).last_hidden_state
+                                prompt_embeds_1 = text_outputs_1.hidden_states[-1]  # Last layer
+                                prompt_embeds_2 = text_outputs_2.hidden_states[-1]
+                                prompt_embeds_3 = text_outputs_3.hidden_states[-1]
 
-                                logger.info(f"CLIP-L output shape: {prompt_embeds_1.shape}")
-                                logger.info(f"CLIP-G output shape: {prompt_embeds_2.shape}")
-                                logger.info(f"T5 output shape: {prompt_embeds_3.shape}")
+                                # Get pooled projections
+                                pooled_1 = (
+                                    text_outputs_1.pooler_output 
+                                    if hasattr(text_outputs_1, 'pooler_output') 
+                                    else prompt_embeds_1[:, 0]  # Fallback to CLS token
+                                )
+                                pooled_2 = (
+                                    text_outputs_2.pooler_output 
+                                    if hasattr(text_outputs_2, 'pooler_output') 
+                                    else prompt_embeds_2[:, 0]
+                                )
+                                pooled_3 = (
+                                    text_outputs_3.pooler_output 
+                                    if hasattr(text_outputs_3, 'pooler_output') 
+                                    else prompt_embeds_3[:, 0]
+                                )
+
+                                pooled_projections = torch.cat([pooled_1, pooled_2, pooled_3], dim=-1)
 
                             # Ensure embeddings have the same sequence length
                             min_length = min(prompt_embeds_1.shape[1], 
@@ -758,6 +761,7 @@ def main():
                     hidden_states=noisy_latents,
                     timestep=timesteps,
                     encoder_hidden_states=encoder_hidden_states,
+                    pooled_projections=pooled_projections,
                 ).sample
 
                 # MSE or V-pred
