@@ -534,9 +534,19 @@ def main():
 
                 if args.train_text_encoder:
                     # Ensure attention masks have correct shape before caching
-                    attention_mask_1 = attention_mask_1.view(ids_1.shape[0], -1)[:, :ids_1.shape[1]]
-                    attention_mask_2 = attention_mask_2.view(ids_2.shape[0], -1)[:, :ids_2.shape[1]]
-                    attention_mask_3 = attention_mask_3.view(ids_3.shape[0], -1)[:, :ids_3.shape[1]]
+                    # Expand batch size to 2 for prior preservation
+                    if args.with_prior_preservation:
+                        attention_mask_1 = attention_mask_1.repeat(2, 1)  # Repeat along batch dimension
+                        attention_mask_2 = attention_mask_2.repeat(2, 1)
+                        attention_mask_3 = attention_mask_3.repeat(2, 1)
+                        ids_1 = ids_1.repeat(2, 1)  # Also repeat input ids
+                        ids_2 = ids_2.repeat(2, 1)
+                        ids_3 = ids_3.repeat(2, 1)
+
+                    # Reshape attention masks to proper dimensions for CLIP
+                    attention_mask_1 = attention_mask_1.view(attention_mask_1.shape[0], 1, 1, attention_mask_1.shape[1]).expand(-1, 1, attention_mask_1.shape[1], -1)
+                    attention_mask_2 = attention_mask_2.view(attention_mask_2.shape[0], 1, 1, attention_mask_2.shape[1]).expand(-1, 1, attention_mask_2.shape[1], -1)
+                    attention_mask_3 = attention_mask_3.view(attention_mask_3.shape[0], 1, 1, attention_mask_3.shape[1]).expand(-1, 1, attention_mask_3.shape[1], -1)
 
                     # Store properly shaped tensors
                     text_encoder_cache.append((
