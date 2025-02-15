@@ -441,7 +441,7 @@ def main():
             input_ids_2.append(ids_2)
             input_ids_3.append(ids_3)
             
-            # Create attention masks (1s for tokens, 0s for padding)
+            # Create attention masks matching sequence lengths
             attention_masks_1.append([1] * len(ids_1))
             attention_masks_2.append([1] * len(ids_2))
             attention_masks_3.append([1] * len(ids_3))
@@ -462,9 +462,9 @@ def main():
                 attention_masks_2.append([1] * len(ids_2))
                 attention_masks_3.append([1] * len(ids_3))
 
-        pixel_values = torch.stack(pixel_values).float()
+        pixel_values = torch.stack(pixel_values)
         
-        # Pad inputs and create attention masks
+        # Pad and create proper attention masks
         padded_1 = tokenizer.pad(
             {"input_ids": input_ids_1, "attention_mask": attention_masks_1}, 
             padding=True, 
@@ -481,14 +481,24 @@ def main():
             return_tensors="pt"
         )
 
+        # Create 4D attention masks with proper batch size
+        def create_4d_attention_mask(attention_mask):
+            # attention_mask: [batch_size, seq_len]
+            batch_size = attention_mask.size(0)
+            seq_len = attention_mask.size(1)
+            # Create causal mask of shape [batch_size, 1, seq_len, seq_len]
+            mask_4d = attention_mask.view(batch_size, 1, 1, seq_len)
+            mask_4d = mask_4d.expand(batch_size, 1, seq_len, seq_len)
+            return mask_4d
+
         return {
             "pixel_values": pixel_values,
             "input_ids_1": padded_1["input_ids"],
             "input_ids_2": padded_2["input_ids"],
             "input_ids_3": padded_3["input_ids"],
-            "attention_mask_1": padded_1["attention_mask"],
-            "attention_mask_2": padded_2["attention_mask"],
-            "attention_mask_3": padded_3["attention_mask"]
+            "attention_mask_1": create_4d_attention_mask(padded_1["attention_mask"]),
+            "attention_mask_2": create_4d_attention_mask(padded_2["attention_mask"]),
+            "attention_mask_3": create_4d_attention_mask(padded_3["attention_mask"])
         }
 
     train_dataloader = torch.utils.data.DataLoader(
