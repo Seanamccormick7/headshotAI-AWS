@@ -533,17 +533,7 @@ def main():
                 latents_cache.append(latent_dist)
 
                 if args.train_text_encoder:
-                    # Ensure attention masks have correct shape before caching
-                    # Expand batch size to 2 for prior preservation
-                    if args.with_prior_preservation:
-                        attention_mask_1 = attention_mask_1.repeat(2, 1)  # Repeat along batch dimension
-                        attention_mask_2 = attention_mask_2.repeat(2, 1)
-                        attention_mask_3 = attention_mask_3.repeat(2, 1)
-                        ids_1 = ids_1.repeat(2, 1)  # Also repeat input ids
-                        ids_2 = ids_2.repeat(2, 1)
-                        ids_3 = ids_3.repeat(2, 1)
-
-                    # Reshape attention masks to proper dimensions for CLIP
+                    # Shape attention masks for CLIP - no need to repeat since prior preservation already doubles the batch
                     attention_mask_1 = attention_mask_1.view(attention_mask_1.shape[0], 1, 1, attention_mask_1.shape[1]).expand(-1, 1, attention_mask_1.shape[1], -1)
                     attention_mask_2 = attention_mask_2.view(attention_mask_2.shape[0], 1, 1, attention_mask_2.shape[1]).expand(-1, 1, attention_mask_2.shape[1], -1)
                     attention_mask_3 = attention_mask_3.view(attention_mask_3.shape[0], 1, 1, attention_mask_3.shape[1]).expand(-1, 1, attention_mask_3.shape[1], -1)
