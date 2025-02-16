@@ -374,6 +374,11 @@ def main():
     tokenizer_2 = pipe.tokenizer_2
     tokenizer_3 = pipe.tokenizer_3
 
+    logger.info("Model initialization complete:")
+    logger.info(f"VAE dtype: {vae.dtype}")
+    logger.info(f"Text encoder dtypes: {text_encoder.dtype}, {text_encoder_2.dtype}, {text_encoder_3.dtype}")
+    logger.info(f"Transformer dtype: {transformer.dtype}")
+
     # Now we can safely log the tokenizer information
     logger.info(f"Tokenizer max lengths: {tokenizer.model_max_length}, "
                 f"{tokenizer_2.model_max_length}, {tokenizer_3.model_max_length}")
@@ -665,12 +670,6 @@ def main():
 
     # If not training text encoder, we won't do backprop for them
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
-
-    # Add logging after model initialization
-    logger.info("Model initialization complete:")
-    logger.info(f"VAE dtype: {vae.dtype}")
-    logger.info(f"Text encoder dtypes: {text_encoder.dtype}, {text_encoder_2.dtype}, {text_encoder_3.dtype}")
-    logger.info(f"Transformer dtype: {transformer.dtype}")
     
     for epoch in range(9999999):
         transformer.train()
