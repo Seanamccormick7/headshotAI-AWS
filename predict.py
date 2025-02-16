@@ -10,10 +10,10 @@ def run_training(
     steps: int = 800,
     output_dir: str = "trained_model",
     sample_prompt: str = "",
-    sample_negative_prompt="ugly, tiling, out of frame, long neck, blurred, ... ",
+    sample_negative_prompt: str = "",
     n_save_sample: int = 2,
     save_guidance_scale: float = 7.5,
-    save_infer_steps: int = 50
+    save_infer_steps: int = 20
 ) -> str:
     """Main training function without Cog dependencies"""
     
@@ -32,7 +32,7 @@ def run_training(
 
     cmd = [
         "python", "dreambooth/train_dreambooth.py",
-        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-large-turbo",
+        "--pretrained_model_name_or_path=runwayml/stable-diffusion-v1-5",
         "--pretrained_vae_name_or_path=stabilityai/sd-vae-ft-mse",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
@@ -45,8 +45,8 @@ def run_training(
         "--gradient_accumulation_steps=1",
         "--learning_rate=1e-6",
         "--lr_scheduler=constant",
-        "--lr_warmup_steps=0",
-        "--num_class_images=100",
+        "--lr_warmup_steps=50",
+        "--num_class_images=50",
         "--sample_batch_size=4",
         f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",

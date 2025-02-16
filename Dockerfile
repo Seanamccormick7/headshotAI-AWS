@@ -30,6 +30,9 @@ RUN pip install --no-cache-dir "numpy<2"
 # Install other Python dependencies (including Celery and Redis)
 RUN pip install --no-cache-dir -r dreambooth/requirements.txt
 
+# Install hf_transfer for faster downloads
+RUN pip install hf_transfer 
+
 # Expose port 8080 for uvicorn
 EXPOSE 8080
 
