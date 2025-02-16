@@ -127,6 +127,16 @@ def validate_embeddings(embeds_1, embeds_2, embeds_3, logger):
     
     return min(embeds_1.shape[1], embeds_2.shape[1], embeds_3.shape[1])
 
+def log_tensor_info(name, tensor, logger):
+    """Helper function to log tensor information"""
+    if tensor is None:
+        logger.warning(f"{name} is None")
+        return
+    try:
+        logger.info(f"{name}: shape={tensor.shape}, dtype={tensor.dtype}, device={tensor.device}")
+        logger.debug(f"{name} first few values: {tensor[:2, :2]}")  # Show a small sample
+    except Exception as e:
+        logger.error(f"Error logging {name}: {str(e)}")
 
 class DreamBoothDataset(Dataset):
     """
@@ -187,61 +197,78 @@ class DreamBoothDataset(Dataset):
             transforms.Normalize([0.5],[0.5]),
         ])
 
+        logger.info(f"Dataset initialized with {self.num_instance_images} instance images")
+        if self.with_prior_preservation:
+            logger.info(f"Prior preservation enabled with {self.num_class_images} class images")
+
     def __len__(self):
         return self._length
 
     def __getitem__(self, idx):
+        logger.debug(f"Getting item {idx}")
         example = {}
+        try:
+            inst_img_path = self.instance_images_path[idx % self.num_instance_images]
+            inst_img = Image.open(inst_img_path).convert("RGB")
+            example["instance_images"] = self.image_transforms(inst_img)
 
-        inst_img_path = self.instance_images_path[idx % self.num_instance_images]
-        inst_img = Image.open(inst_img_path).convert("RGB")
-        example["instance_images"] = self.image_transforms(inst_img)
-
-        # Tokenize with all three tokenizers
-        example["instance_prompt_ids_1"] = self.tokenizer(
-            self.instance_prompt,
-            padding="do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer.model_max_length,
-        ).input_ids
-        example["instance_prompt_ids_2"] = self.tokenizer_2(
-            self.instance_prompt,
-            padding="do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer_2.model_max_length,
-        ).input_ids
-        example["instance_prompt_ids_3"] = self.tokenizer_3(
-            self.instance_prompt,
-            padding="do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer_3.model_max_length,
-        ).input_ids
-
-        if self.with_prior_preservation and self.class_images_path:
-            cls_img_path = self.class_images_path[idx % self.num_class_images]
-            cls_img = Image.open(cls_img_path).convert("RGB")
-            example["class_images"] = self.image_transforms(cls_img)
-
-            example["class_prompt_ids_1"] = self.tokenizer(
-                self.class_prompt,
+            # Tokenize with all three tokenizers
+            example["instance_prompt_ids_1"] = self.tokenizer(
+                self.instance_prompt,
                 padding="do_not_pad",
                 truncation=True,
                 max_length=self.tokenizer.model_max_length,
             ).input_ids
-            example["class_prompt_ids_2"] = self.tokenizer_2(
-                self.class_prompt,
+            example["instance_prompt_ids_2"] = self.tokenizer_2(
+                self.instance_prompt,
                 padding="do_not_pad",
                 truncation=True,
                 max_length=self.tokenizer_2.model_max_length,
             ).input_ids
-            example["class_prompt_ids_3"] = self.tokenizer_3(
-                self.class_prompt,
+            example["instance_prompt_ids_3"] = self.tokenizer_3(
+                self.instance_prompt,
                 padding="do_not_pad",
                 truncation=True,
                 max_length=self.tokenizer_3.model_max_length,
             ).input_ids
 
-        return example
+            logger.debug(f"Instance prompt tokenization lengths: "
+                        f"tok1={len(example['instance_prompt_ids_1'])}, "
+                        f"tok2={len(example['instance_prompt_ids_2'])}, "
+                        f"tok3={len(example['instance_prompt_ids_3'])}")
+            
+            if self.with_prior_preservation and self.class_images_path:
+                cls_img_path = self.class_images_path[idx % self.num_class_images]
+                cls_img = Image.open(cls_img_path).convert("RGB")
+                example["class_images"] = self.image_transforms(cls_img)
+
+                example["class_prompt_ids_1"] = self.tokenizer(
+                    self.class_prompt,
+                    padding="do_not_pad",
+                    truncation=True,
+                    max_length=self.tokenizer.model_max_length,
+                ).input_ids
+                example["class_prompt_ids_2"] = self.tokenizer_2(
+                    self.class_prompt,
+                    padding="do_not_pad",
+                    truncation=True,
+                    max_length=self.tokenizer_2.model_max_length,
+                ).input_ids
+                example["class_prompt_ids_3"] = self.tokenizer_3(
+                    self.class_prompt,
+                    padding="do_not_pad",
+                    truncation=True,
+                    max_length=self.tokenizer_3.model_max_length,
+                ).input_ids
+
+                logger.debug(f"Class prompt tokenization lengths: "
+                            f"tok1={len(example['class_prompt_ids_1'])}, "
+                            f"tok2={len(example['class_prompt_ids_2'])}, "
+                            f"tok3={len(example['class_prompt_ids_3'])}")
+            return example
+        except Exception as e:
+            logger.error(f"Error in __getitem__ for idx {idx}: {str(e)}")
+            raise
 
 class PromptDataset(Dataset):
     """
@@ -421,6 +448,7 @@ def main():
     )
 
     def collate_fn(examples):
+        logger.debug(f"Collating batch of size {len(examples)}")
         pixel_values = []
         input_ids_1 = []
         input_ids_2 = []
@@ -481,6 +509,16 @@ def main():
             return_tensors="pt"
         )
 
+        # Add logging before return
+        logger.debug(f"Collated shapes:"
+                    f"\n\tpixel_values: {pixel_values.shape}"
+                    f"\n\tinput_ids_1: {padded_1['input_ids'].shape}"
+                    f"\n\tinput_ids_2: {padded_2['input_ids'].shape}"
+                    f"\n\tinput_ids_3: {padded_3['input_ids'].shape}"
+                    f"\n\tattention_mask_1: {padded_1['attention_mask'].shape}"
+                    f"\n\tattention_mask_2: {padded_2['attention_mask'].shape}"
+                    f"\n\tattention_mask_3: {padded_3['attention_mask'].shape}")
+        
         return {
             "pixel_values": pixel_values,
             "input_ids_1": padded_1["input_ids"],
@@ -628,6 +666,12 @@ def main():
     # If not training text encoder, we won't do backprop for them
     text_enc_context = nullcontext() if args.train_text_encoder else torch.no_grad()
 
+    # Add logging after model initialization
+    logger.info("Model initialization complete:")
+    logger.info(f"VAE dtype: {vae.dtype}")
+    logger.info(f"Text encoder dtypes: {text_encoder.dtype}, {text_encoder_2.dtype}, {text_encoder_3.dtype}")
+    logger.info(f"Transformer dtype: {transformer.dtype}")
+    
     for epoch in range(9999999):
         transformer.train()
         if args.train_text_encoder:
@@ -638,6 +682,12 @@ def main():
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(transformer):
                 if not args.not_cache_latents:
+                    # Add logging for batch structure
+                    if isinstance(batch, (tuple, list)):
+                        logger.debug(f"Batch is tuple/list of length {len(batch)}")
+                    elif isinstance(batch, dict):
+                        logger.debug(f"Batch keys: {batch.keys()}")
+                    
                     latents, text_data = batch
                     bsz = latents.shape[0]
                     noise = torch.randn_like(latents)
@@ -722,6 +772,19 @@ def main():
                                     device=latents.device,
                                     dtype=torch.float32
                                 )
+                    log_tensor_info("latents", latents, logger)
+                    
+                    if isinstance(text_data, tuple):
+                        logger.debug(f"text_data is tuple of length {len(text_data)}")
+                        for i, item in enumerate(text_data):
+                            log_tensor_info(f"text_data[{i}]", item, logger)
+                    
+                    # Add logging for attention masks
+                    if args.train_text_encoder:
+                        (ids_1, mask_1), (ids_2, mask_2), (ids_3, mask_3) = text_data
+                        log_tensor_info("mask_1 pre-expansion", mask_1, logger)
+                        log_tensor_info("mask_2 pre-expansion", mask_2, logger)
+                        log_tensor_info("mask_3 pre-expansion", mask_3, logger)
 
                 else:
                     # not caching latents
@@ -786,6 +849,11 @@ def main():
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
+
+                # Add logging for model outputs
+                log_tensor_info("model_pred", model_pred, logger)
+                log_tensor_info("target", target, logger)
+                logger.debug(f"Loss: {loss.item()}")
 
             if accelerator.is_main_process and step % 10 == 0:
                 progress_bar.set_postfix({"loss": loss.item()})
