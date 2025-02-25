@@ -61,21 +61,25 @@ def generate_images_task(self, req_data: dict):
         glasses = req_data.get("glasses", False)
         glasses_str = "wearing glasses" if glasses else "no glasses"
 
+
+        # class_prompt used for prior preservation
+        class_prompt = "Photo of a person"
+
+        # Used to learn the specific subject (the user-uploaded photos).
         instance_prompt = (
             f"Photo of a {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
         )
-        sample_prompt = (
+
+        # For the final images we actually want at the end:
+        validation_prompt = (
             f"High quality professional headshot of a {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
             f"wearing {attire}, in a {backgrounds} setting."
         )
-        
-        # Define class prompt - make it more generic than the instance prompt
-        class_prompt = f"Photo of a person"
 
         # 4) Set the training steps
-        training_steps = 200
+        training_steps = 10 # will increase when know is working
 
         # 5) Create a temporary output directory for the training results.
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
@@ -86,7 +90,7 @@ def generate_images_task(self, req_data: dict):
             instance_prompt=instance_prompt,
             steps=training_steps,
             output_dir=output_dir,
-            sample_prompt=sample_prompt,
+            validation_prompt=validation_prompt,
             class_prompt=class_prompt,
             class_data_dir="class_images"  # Use the class_images directory
         )
@@ -94,19 +98,24 @@ def generate_images_task(self, req_data: dict):
 
         # 6) Upload generated images to Uploadcare.
         generated_uuids = []
-        # NOTE: The final script saves samples in: {output_dir}/samples
-        samples_dir = os.path.join(output_dir, "samples")
-        if not os.path.isdir(samples_dir):
-            print("No images found in", samples_dir)
+        # NOTE: The final script saves images in something like output_dir/validation/epoch-xx/
+        validation_dir = os.path.join(output_dir, "validation")
+        if not os.path.isdir(validation_dir):
+            print("No validation images found in", validation_dir)
         else:
-            from pyuploadcare import Uploadcare
-            uploadcare = Uploadcare()
-            for filename in os.listdir(samples_dir):
-                if filename.lower().endswith((".png", ".jpg", ".jpeg")):
-                    fullpath = os.path.join(samples_dir, filename)
-                    with open(fullpath, "rb") as file_obj:
-                        file_uploaded = uploadcare.upload(file_obj)
-                    generated_uuids.append(str(file_uploaded.uuid))
+            # Find the last epoch directory inside "validation/"
+            subfolders = sorted(os.listdir(validation_dir))
+            if not subfolders:
+                print("No epoch subfolders found in validation directory")
+            else:
+                final_epoch_dir = os.path.join(validation_dir, subfolders[-1])  # e.g. "epoch-8"
+                # Upload all images from final_epoch_dir to your hosting
+                for filename in os.listdir(final_epoch_dir):
+                    if filename.lower().endswith((".png", ".jpg", ".jpeg")):
+                        fullpath = os.path.join(final_epoch_dir, filename)
+                        with open(fullpath, "rb") as file_obj:
+                            file_uploaded = uploadcare.upload(file_obj)
+                        generated_uuids.append(str(file_uploaded.uuid))
 
         # 7) Callback to Next.js with the generated image UUIDs.
         callback_payload = {
