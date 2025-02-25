@@ -1,6 +1,6 @@
 # Dockerfile
 
-FROM nvidia/cuda:12.2.0-cudnn8-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu24.04
 
 # Make sure you have a system environment (Python 3.10 or 3.9, etc.)
 RUN apt-get update && apt-get install -y git wget python3 python3-pip
