@@ -7,6 +7,7 @@ import subprocess
 import glob
 import shutil
 import pyuploadcare
+import torch
 
 from celery_app import celery_app
 from predict import run_training
