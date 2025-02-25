@@ -21,8 +21,24 @@ RUN pip3 install hf_transfer
 # Install the project dependencies
 RUN pip3 install -r dreambooth/requirements.txt
 
-# (Optionally) configure accelerate with default answers:
-RUN accelerate config default --mixed_precision=fp16
+# Create accelerate config file directly
+RUN mkdir -p /root/.cache/huggingface/accelerate
+RUN echo '{\n\
+  "compute_environment": "LOCAL_MACHINE",\n\
+  "distributed_type": "NO",\n\
+  "downcast_bf16": "no",\n\
+  "gpu_ids": "all",\n\
+  "machine_rank": 0,\n\
+  "main_training_function": "main",\n\
+  "mixed_precision": "fp16",\n\
+  "num_machines": 1,\n\
+  "num_processes": 1,\n\
+  "rdzv_backend": "static",\n\
+  "tpu_env": [],\n\
+  "tpu_use_cluster": false,\n\
+  "tpu_use_sudo": false,\n\
+  "use_cpu": false\n\
+}' > /root/.cache/huggingface/accelerate/default_config.yaml
 
 # Expose port, set the entrypoint, etc. (custom to your needs)
 EXPOSE 8080
