@@ -11,9 +11,14 @@ COPY . /app
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install your DreamBooth + project dependencies
+# Install Diffusers from source
 RUN pip3 install --upgrade pip
 RUN pip3 install git+https://github.com/huggingface/diffusers.git
+
+# Install hf_transfer for faster model downloads
+RUN pip3 install hf_transfer
+
+# Install the project dependencies
 RUN pip3 install -r dreambooth/requirements.txt
 
 # (Optionally) configure accelerate with default answers:
