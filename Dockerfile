@@ -16,7 +16,7 @@ RUN pip3 install --upgrade pip
 RUN pip3 install -r dreambooth/requirements.txt
 
 # (Optionally) configure accelerate with default answers:
-RUN accelerate config default
+RUN accelerate config default --mixed_precision=fp16
 
 # Expose port, set the entrypoint, etc. (custom to your needs)
 EXPOSE 8080
