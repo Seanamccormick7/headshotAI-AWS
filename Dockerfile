@@ -3,7 +3,7 @@
 FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu24.04
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y git wget python3 python3-pip python3-venv
+RUN apt-get update && apt-get install -y git wget python3 python3-pip python3-venv unzip
 
 WORKDIR /app
 COPY . /app
