@@ -44,7 +44,7 @@ def run_training(
         "--learning_rate=4e-4",
         "--lr_scheduler=constant",
         "--seed=40",
-        "--report_to=wandb",
+        "--report_to=tensorboard",
         f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
         f"--instance_data_dir={instance_data_dir}",
