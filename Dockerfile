@@ -13,6 +13,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install your DreamBooth + project dependencies
 RUN pip3 install --upgrade pip
+RUN pip3 install git+https://github.com/huggingface/diffusers.git
 RUN pip3 install -r dreambooth/requirements.txt
 
 # (Optionally) configure accelerate with default answers:
