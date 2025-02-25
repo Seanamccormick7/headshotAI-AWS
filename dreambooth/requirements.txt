@@ -1,12 +1,15 @@
 # requirements.txt
 
-# requirements.txt
-accelerate==0.30.1
-diffusers==0.32.2
-transformers>=4.46.0
-
-# The rest as before
+accelerate>=0.31.0
+torchvision
+transformers>=4.41.2
+torch>=2.0
 ftfy
+tensorboard
+peft==0.11.1
+sentencepiece
+bitsandbytes; platform_system == "Linux"  # if you want 8bit Adam
+Jinja2
 tqdm
 
 fastapi>=0.95.0
@@ -19,7 +22,11 @@ safetensors>=0.4.1
 opencv-python-headless
 scipy
 datasets
-tensorboard==2.13.0
 celery>=5.2.7
 redis>=4.3.4
 
+# Optionally for logging
+wandb
+
+# If you need the huggingface cli for login or pushing to hub
+huggingface_hub

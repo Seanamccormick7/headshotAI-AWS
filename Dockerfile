@@ -1,37 +1,20 @@
 # Dockerfile
 
-FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.0-cudnn8-devel-ubuntu22.04
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-dev git libgl1-mesa-glx libglib2.0-0 unzip \
-    build-essential ninja-build \
- && rm -rf /var/lib/apt/lists/*
+# Make sure you have a system environment (Python 3.10 or 3.9, etc.)
+RUN apt-get update && apt-get install -y git wget python3 python3-pip
 
-RUN ln -s /usr/bin/python3 /usr/bin/python
+WORKDIR /app
+COPY . /app
 
-WORKDIR /workspace
-COPY . .
+# Install your DreamBooth + project dependencies
+RUN pip3 install --upgrade pip
+RUN pip3 install -r dreambooth/requirements.txt
 
-RUN python -m pip install --upgrade pip
+# (Optionally) configure accelerate with default answers:
+RUN accelerate config default
 
-# Install PyTorch and torchvision with matching CUDA version
-RUN pip3 install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
-
-# Install bitsandbytes for CUDA 12.x
-RUN python -m pip install bitsandbytes==0.41.1
-
-# Install xformers with matching CUDA support
-RUN pip install -U xformers==0.0.22.post7
-
-# Install hf_transfer for faster downloads
-RUN pip install hf_transfer
-
-# Install sentencepiece for T5 tokenizer
-RUN pip install sentencepiece
-
-# Install remaining requirements
-RUN python -m pip install --no-cache-dir "numpy<2"
-RUN python -m pip install --no-cache-dir -r dreambooth/requirements.txt
-
+# Expose port, set the entrypoint, etc. (custom to your needs)
 EXPOSE 8080
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python3", "main.py"]

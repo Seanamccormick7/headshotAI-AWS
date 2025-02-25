@@ -30,46 +30,28 @@ def run_training(
 
     # Build the training command
     cmd = [
-        "python", "dreambooth/train_dreambooth.py",
-        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3.5-medium",
+        "accelerate", "launch",
+        "dreambooth/train_dreambooth_lora_sd3.py",
+        "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3-medium-diffusers",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
-        "--seed=42",
         "--resolution=512",
         "--train_batch_size=1",
         "--train_text_encoder",
-        "--mixed_precision=bf16",
-        "--use_8bit_adam",
+        "--mixed_precision=fp16",
         "--gradient_checkpointing",
-        "--gradient_accumulation_steps=1",
-        "--learning_rate=1e-6",
+        "--gradient_accumulation_steps=4",
+        "--learning_rate=4e-4",
         "--lr_scheduler=constant",
-        "--lr_warmup_steps=0",
-        "--num_class_images=50",
-        "--sample_batch_size=1",
+        "--seed=40",
+        "--report_to=wandb",
         f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
+        f"--class_data_dir={class_data_dir}",
+        f"--class_prompt={class_prompt}",
     ]
-
-    # Add class-related arguments if provided
-    if class_data_dir and class_prompt:
-        cmd.extend([
-            f"--class_data_dir={class_data_dir}",
-            f"--class_prompt={class_prompt}"
-        ])
-
-    # If we want to save sample images after training, pass the sample args
-    if sample_prompt:
-        cmd.extend([
-            f"--save_sample_prompt={sample_prompt}",
-            f"--n_save_sample={n_save_sample}",
-            f"--save_guidance_scale={save_guidance_scale}",
-            f"--save_infer_steps={save_infer_steps}",
-        ])
-        if sample_negative_prompt:
-            cmd.append(f"--save_sample_negative_prompt={sample_negative_prompt}")
 
     subprocess.run(cmd, check=True)
     return f"Training complete. Model saved at {output_dir}/"
