@@ -11,7 +11,6 @@ import torch
 
 from celery_app import celery_app
 from predict import run_training
-# Import your new inference function
 from inference import run_inference
 
 # Configure Uploadcare keys (ensure these environment variables are set)
@@ -95,14 +94,14 @@ def generate_images_task(self, req_data: dict):
             steps=training_steps,
             output_dir=output_dir,
             class_prompt=class_prompt,
-            class_data_dir="class_images"
+            class_data_dir="class_images",
+            num_class_images=50,        #can do more than are in class images file (program will just generate more) 
         )
         print("DreamBooth training output:", train_output)
 
         # 7) Post-training inference
         # We'll store these final images in: e.g. output_dir + "/inference"
         inference_dir = os.path.join(output_dir, "inference_output")
-        from inference import run_inference  # or you already imported at top
         run_inference(
             base_model="stabilityai/stable-diffusion-3-medium-diffusers",
             lora_weights_path=os.path.join(output_dir, "pytorch_lora_weights.safetensors"),

@@ -9,12 +9,9 @@ def run_training(
     instance_prompt: str,
     steps: int = 10, #default value (can actually change in tasks.py)
     output_dir: str = "trained_model",
-    sample_negative_prompt: str = "",
-    n_save_sample: int = 2,
-    save_guidance_scale: float = 7.5,
-    save_infer_steps: int = 20,
     class_prompt: str = None,  # Added class prompt parameter
-    class_data_dir: str = None  # Added class data directory parameter
+    class_data_dir: str = None,  # Added class data directory parameter
+    num_class_images: int = 50,  # Added number of class images parameter
 ) -> str:
     """Main training function without Cog dependencies."""
 
@@ -50,7 +47,7 @@ def run_training(
         f"--instance_prompt={instance_prompt}",
         f"--class_data_dir={class_data_dir}",
         f"--class_prompt={class_prompt}",
-        "--num_class_images=50",
+        f"--num_class_images={num_class_images}",
     ]
 
     subprocess.run(cmd, check=True)

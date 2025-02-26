@@ -6,7 +6,7 @@ from diffusers import StableDiffusion3Pipeline
 def run_inference(
     base_model="stabilityai/stable-diffusion-3-medium-diffusers",
     lora_weights_path="trained_model/pytorch_lora_weights.safetensors",
-    prompt="Professional headshot photo of a man with brown hair, 30-year-old, wearing a suit, in a studio setting.", #change to dynamic prompt
+    prompt="Professional headshot photo of a man with brown hair, 30-year-old, wearing a suit, in a studio setting.", 
     outdir="inference_output",
     num_images=10,
     guidance_scale=7.5,
