@@ -70,13 +70,13 @@ def generate_images_task(self, req_data: dict):
         class_prompt = "Photo of a person"
         # instance prompt Used to learn the specific subject (the user-uploaded photos).
         instance_prompt = (
-            f"Photo of a {age_str}{gender} with {hairColor} hair "
+            f"Photo of a sks {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
         )
 
         # The final prompt for generating images after training
         inference_prompt = (
-            f"Professional studio headshot of the {age_str}{gender} with {hairColor} hair "
+            f"Professional studio headshot of the sks {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
             f"wearing {attire}, in {backgrounds}, shot with professional lighting, "
             f"high detail, 4k, sharp focus, DSLR, professional portrait photography, "
