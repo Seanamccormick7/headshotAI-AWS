@@ -1,4 +1,4 @@
-# tasks.py (within generate_images_task)
+# tasks.py
 import os
 import tempfile
 import zipfile
@@ -7,9 +7,12 @@ import subprocess
 import glob
 import shutil
 import pyuploadcare
+import torch
 
 from celery_app import celery_app
 from predict import run_training
+# Import your new inference function
+from inference import run_inference
 
 # Configure Uploadcare keys (ensure these environment variables are set)
 pyuploadcare.conf.api_secret = os.environ.get("UPLOADCARE_SECRET_KEY", "secret")
@@ -29,7 +32,7 @@ def generate_images_task(self, req_data: dict):
         instanceImages = req_data.get("instanceImages", [])
         callbackUrl = req_data.get("callbackUrl")
 
-        # 1) Download user's instance images into a temporary directory.
+        # 1) Download instance images
         instance_dir = tempfile.mkdtemp(prefix="instance_images_")
         for i, uuid in enumerate(instanceImages):
             download_url = f"https://ucarecdn.com/{uuid}/-/format/jpeg/"
@@ -41,14 +44,17 @@ def generate_images_task(self, req_data: dict):
             else:
                 print(f"Failed to download {uuid}, status {r.status_code}")
 
-        # 2) Zip the images
+        # 2) Zip them
         zip_path = os.path.join(instance_dir, "images.zip")
         with zipfile.ZipFile(zip_path, 'w') as zf:
             for img_file in os.listdir(instance_dir):
                 if img_file.endswith(".jpg"):
-                    zf.write(os.path.join(instance_dir, img_file), arcname=img_file)
+                    zf.write(
+                        os.path.join(instance_dir, img_file),
+                        arcname=img_file
+                    )
 
-        # 3) Build a dynamic prompt based on frontend variables.
+        # 3) Build dynamic prompt info
         gender = req_data.get("gender", "person")
         age = req_data.get("age", None)
         age_str = f"{age}-year-old " if age is not None else ""
@@ -61,63 +67,68 @@ def generate_images_task(self, req_data: dict):
         glasses = req_data.get("glasses", False)
         glasses_str = "wearing glasses" if glasses else "no glasses"
 
-
         # class_prompt used for prior preservation
         class_prompt = "Photo of a person"
-
-        # Used to learn the specific subject (the user-uploaded photos).
+        # instance prompt Used to learn the specific subject (the user-uploaded photos).
         instance_prompt = (
             f"Photo of a {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
         )
 
-        # For the final images we actually want at the end:
-        validation_prompt = (
-            f"High quality professional headshot of a {age_str}{gender} with {hairColor} hair "
-            f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
-            f"wearing {attire}, in a {backgrounds} setting."
+        # The final prompt for generating images after training
+        inference_prompt = (
+            f"High quality professional headshot of a {age_str}{gender} "
+            f"with {hairColor} hair ({hairLength}), of {ethnicity} ethnicity, "
+            f"{bodyType} build, {glasses_str}, wearing {attire}, in a {backgrounds} setting."
         )
 
-        # 4) Set the training steps
-        training_steps = 10 # will increase when know is working
+        # 4) Set training steps
+        training_steps = 10
 
-        # 5) Create a temporary output directory for the training results.
+        # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
 
-        # Run DreamBooth training using the dynamic prompt
+        # 6) DreamBooth training (LoRA)
         train_output = run_training(
             instance_data=zip_path,
             instance_prompt=instance_prompt,
             steps=training_steps,
             output_dir=output_dir,
-            validation_prompt=validation_prompt,
             class_prompt=class_prompt,
-            class_data_dir="class_images"  # Use the class_images directory
+            class_data_dir="class_images"
         )
         print("DreamBooth training output:", train_output)
 
-        # 6) Upload generated images to Uploadcare.
-        generated_uuids = []
-        # NOTE: The final script saves images in something like output_dir/validation/epoch-xx/
-        validation_dir = os.path.join(output_dir, "validation")
-        if not os.path.isdir(validation_dir):
-            print("No validation images found in", validation_dir)
-        else:
-            # Find the last epoch directory inside "validation/"
-            subfolders = sorted(os.listdir(validation_dir))
-            if not subfolders:
-                print("No epoch subfolders found in validation directory")
-            else:
-                final_epoch_dir = os.path.join(validation_dir, subfolders[-1])  # e.g. "epoch-8"
-                # Upload all images from final_epoch_dir to your hosting
-                for filename in os.listdir(final_epoch_dir):
-                    if filename.lower().endswith((".png", ".jpg", ".jpeg")):
-                        fullpath = os.path.join(final_epoch_dir, filename)
-                        with open(fullpath, "rb") as file_obj:
-                            file_uploaded = uploadcare.upload(file_obj)
-                        generated_uuids.append(str(file_uploaded.uuid))
+        # 7) Post-training inference
+        # We'll store these final images in: e.g. output_dir + "/inference"
+        inference_dir = os.path.join(output_dir, "inference_output")
+        from inference import run_inference  # or you already imported at top
+        run_inference(
+            base_model="stabilityai/stable-diffusion-3-medium-diffusers",
+            lora_weights_path=os.path.join(output_dir, "pytorch_lora_weights.safetensors"),
+            prompt=inference_prompt,
+            outdir=inference_dir,
+            num_images=20,  # or however many you want
+            guidance_scale=7.5,
+            num_inference_steps=30,
+            torch_dtype=torch.float16,
+        )
 
-        # 7) Callback to Next.js with the generated image UUIDs.
+        # 8) Upload generated images to Uploadcare
+        generated_uuids = []
+        if not os.path.isdir(inference_dir):
+            print("No inference images found in", inference_dir)
+        else:
+            from pyuploadcare import Uploadcare
+            uploadcare = Uploadcare()
+            for filename in os.listdir(inference_dir):
+                if filename.lower().endswith((".png", ".jpg", ".jpeg")):
+                    fullpath = os.path.join(inference_dir, filename)
+                    with open(fullpath, "rb") as file_obj:
+                        file_uploaded = uploadcare.upload(file_obj)
+                    generated_uuids.append(str(file_uploaded.uuid))
+
+        # 9) Callback with the final images
         callback_payload = {
             "userId": userId,
             "generatedUuids": generated_uuids,
@@ -127,11 +138,12 @@ def generate_images_task(self, req_data: dict):
             print(f"Callback to Next.js failed: {resp.text}")
 
         return {"message": "Generation task completed", "generatedUuids": generated_uuids}
+
     except Exception as e:
         print("Error in generate_images_task:", str(e))
         raise e
     finally:
-        # Clean up temporary directories to free up space.
+        # Cleanup
         if instance_dir and os.path.exists(instance_dir):
             shutil.rmtree(instance_dir, ignore_errors=True)
         if output_dir and os.path.exists(output_dir):

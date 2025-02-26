@@ -9,7 +9,6 @@ def run_training(
     instance_prompt: str,
     steps: int = 10, #default value (can actually change in tasks.py)
     output_dir: str = "trained_model",
-    validation_prompt: str = None,
     sample_negative_prompt: str = "",
     n_save_sample: int = 2,
     save_guidance_scale: float = 7.5,
