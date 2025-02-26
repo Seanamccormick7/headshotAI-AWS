@@ -76,13 +76,15 @@ def generate_images_task(self, req_data: dict):
 
         # The final prompt for generating images after training
         inference_prompt = (
-            f"High quality professional headshot of a {age_str}{gender} "
-            f"with {hairColor} hair ({hairLength}), of {ethnicity} ethnicity, "
-            f"{bodyType} build, {glasses_str}, wearing {attire}, in a {backgrounds} setting."
+            f"Professional studio headshot of the {age_str}{gender} with {hairColor} hair "
+            f"({hairLength}), {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
+            f"wearing {attire}, in {backgrounds}, shot with professional lighting, "
+            f"high detail, 4k, sharp focus, DSLR, professional portrait photography, "
+            f"high-end editorial photography, trending on artstation, highly detailed"
         )
 
         # 4) Set training steps
-        training_steps = 10
+        training_steps = 800
 
         # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
@@ -107,7 +109,7 @@ def generate_images_task(self, req_data: dict):
             lora_weights_path=os.path.join(output_dir, "pytorch_lora_weights.safetensors"),
             prompt=inference_prompt,
             outdir=inference_dir,
-            num_images=20,  # or however many you want
+            num_images=5,  # doing 5 just for testing, change to 100 in production
             guidance_scale=7.5,
             num_inference_steps=30,
             torch_dtype=torch.float16,

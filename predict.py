@@ -31,17 +31,18 @@ def run_training(
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3-medium-diffusers",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",
-        "--resolution=512",
-        "--train_batch_size=1",
-        "--train_text_encoder",
+        "--resolution=512",         #can change to 768 for better resolution
+        "--train_batch_size=1",     
+        "--gradient_accumulation_steps=2",      #can change to 4 if needed
+        "--train_text_encoder",         #necessary for faces
         "--mixed_precision=fp16",
+        "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
-        "--gradient_accumulation_steps=4",
-        "--learning_rate=4e-4",
+        "--learning_rate=1e-6",     #or 2e-6 if not working well
         "--lr_scheduler=constant",
         "--seed=40",
         "--report_to=tensorboard",
-        f"--max_train_steps={steps}",
+        f"--max_train_steps={steps}",    #trying 800, but can increase to 1200 if possible
         f"--output_dir={output_dir}",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
