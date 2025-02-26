@@ -84,7 +84,7 @@ def generate_images_task(self, req_data: dict):
         )
 
         # 4) Set training steps
-        training_steps = 800
+        training_steps = 1200
 
         # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
@@ -100,6 +100,8 @@ def generate_images_task(self, req_data: dict):
             num_class_images=50,        #can do more than are in class images file (program will just generate more) 
         )
         print("DreamBooth training output:", train_output)
+        print("Instance prompt:", instance_prompt)
+        print("Inference prompt:", inference_prompt)
 
         # 7) Post-training inference
         # We'll store these final images in: e.g. output_dir + "/inference"
