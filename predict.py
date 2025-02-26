@@ -51,6 +51,7 @@ def run_training(
         f"--instance_prompt={instance_prompt}",
         f"--class_data_dir={class_data_dir}",
         f"--class_prompt={class_prompt}",
+        "--num_class_images=50",
         f"--validation_prompt={validation_prompt}",
         "--num_validation_images=20",
         "--validation_epochs=1",

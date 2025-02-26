@@ -1111,8 +1111,10 @@ def main(args):
     if args.with_prior_preservation:
         class_images_dir = Path(args.class_data_dir)
         if not class_images_dir.exists():
+            logger.info("Class images directory not found. Creating one.")
             class_images_dir.mkdir(parents=True)
         cur_class_images = len(list(class_images_dir.iterdir()))
+        logger.info(f"Number of class images found: {cur_class_images}.")
 
         if cur_class_images < args.num_class_images:
             has_supported_fp16_accelerator = torch.cuda.is_available() or torch.backends.mps.is_available()
