@@ -27,7 +27,7 @@ def run_training(
     # Build the training command
     cmd = [
         "accelerate", "launch",
-        "dreambooth/train_dreambooth_lora_sd3.py",
+        "dreambooth/train_dreambooth_sd3.py",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3-medium-diffusers",
         "--with_prior_preservation",
         "--prior_loss_weight=1.0",

@@ -3,9 +3,8 @@ accelerate>=0.31.0
 torchvision
 transformers>=4.41.2
 torch>=2.0
-ftfy
+ftfy  
 tensorboard
-peft==0.11.1
 sentencepiece
 bitsandbytes; platform_system == "Linux"  # if you want 8bit Adam
 Jinja2

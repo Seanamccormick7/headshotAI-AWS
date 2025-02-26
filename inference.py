@@ -5,7 +5,6 @@ from diffusers import StableDiffusion3Pipeline, DDIMScheduler, DPMSolverMultiste
 
 def run_inference(
     base_model="stabilityai/stable-diffusion-3-medium-diffusers",
-    lora_weights_path="trained_model/pytorch_lora_weights.safetensors",
     prompt="Professional headshot photo of a man with brown hair, 30-year-old, wearing a suit, in a studio setting.", 
     negative_prompt="blurry, deformed, bad anatomy, disfigured, poorly drawn face, distorted face, mutation, mutated, extra limb, ugly, poorly drawn hands, missing limb, floating limbs, disconnected limbs, malformed hands, out of focus",
     outdir="inference_output",
@@ -15,7 +14,7 @@ def run_inference(
     torch_dtype=torch.float16,
 ):
     """
-    Loads base SD3 model, applies LoRA weights, generates images from `prompt`,
+    Loads base SD3 model, and generates images from `prompt`,
     and saves them into `outdir` directory.
     """
     os.makedirs(outdir, exist_ok=True)
@@ -23,11 +22,10 @@ def run_inference(
     # 1) Load the base SD3 pipeline
     pipe = StableDiffusion3Pipeline.from_pretrained(
         base_model,
-        torch_dtype=torch_dtype
+        torch_dtype=torch_dtype,
+        safety_checker=None
     ).to("cuda")
     #pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)   # or can set inference steps to 100
-    # 2) Load your LoRA weights
-    pipe.load_lora_weights(lora_weights_path)
 
     # 3) Generate images in a loop
     for i in range(num_images):

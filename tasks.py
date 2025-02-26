@@ -84,12 +84,12 @@ def generate_images_task(self, req_data: dict):
         )
 
         # 4) Set training steps
-        training_steps = 2000
+        training_steps = 1200
 
         # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
 
-        # 6) DreamBooth training (LoRA)
+        # 6) DreamBooth training
         train_output = run_training(
             instance_data=zip_path,
             instance_prompt=instance_prompt,
@@ -108,7 +108,6 @@ def generate_images_task(self, req_data: dict):
         inference_dir = os.path.join(output_dir, "inference_output")
         run_inference(
             base_model="stabilityai/stable-diffusion-3-medium-diffusers",
-            lora_weights_path=os.path.join(output_dir, "pytorch_lora_weights.safetensors"),
             prompt=inference_prompt,
             outdir=inference_dir,
             num_images=5,  # doing 5 just for testing, change to 100 in production
