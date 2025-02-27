@@ -905,8 +905,15 @@ def _encode_prompt_with_clip(
     text_input_ids=None,
     num_images_per_prompt: int = 1,
 ):
-    prompt = [prompt] if isinstance(prompt, str) else prompt
-    batch_size = len(prompt)
+    if prompt is not None:
+        prompt = [prompt] if isinstance(prompt, str) else prompt
+        batch_size = len(prompt)  # if prompt is not None
+    else:
+        # If we're given text_input_ids directly, infer batch size from that:
+        if text_input_ids is not None:
+            batch_size = text_input_ids.shape[0]
+        else:
+            raise ValueError("Must provide either prompt (string) or text_input_ids (Tensor).")
 
     if tokenizer is not None:
         text_inputs = tokenizer(
@@ -947,7 +954,11 @@ def encode_prompt(
 ):
     prompt = [prompt] if isinstance(prompt, str) else prompt
 
-    clip_tokenizers = tokenizers[:2]
+    if tokenizers is None:
+       clip_tokenizers = [None, None]
+    else:
+       clip_tokenizers = tokenizers[:2]
+
     clip_text_encoders = text_encoders[:2]
 
     clip_prompt_embeds_list = []
