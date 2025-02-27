@@ -72,7 +72,7 @@ def generate_images_task(self, req_data: dict):
         instance_prompt = (
             f"Photo of a sks {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
-        )
+        )   
 
         # The final prompt for generating images after training
         inference_prompt = (
@@ -107,7 +107,7 @@ def generate_images_task(self, req_data: dict):
         # We'll store these final images in: e.g. output_dir + "/inference"
         inference_dir = os.path.join(output_dir, "inference_output")
         run_inference(
-            base_model="stabilityai/stable-diffusion-3-medium-diffusers",
+            base_model=output_dir,
             prompt=inference_prompt,
             outdir=inference_dir,
             num_images=5,  # doing 5 just for testing, change to 100 in production
