@@ -1605,6 +1605,7 @@ def main(args):
                         text_encoders=[text_encoder_one, text_encoder_two, text_encoder_three],
                         tokenizers=None,
                         prompt=None,
+                        max_sequence_length=args.max_sequence_length,
                         text_input_ids_list=[tokens_one, tokens_two, tokens_three],
                     )
                     model_pred = transformer(
