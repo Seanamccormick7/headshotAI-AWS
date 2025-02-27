@@ -34,7 +34,7 @@ def run_training(
         "--resolution=512",         #can change to 768 for better resolution
         "--train_batch_size=1",     
         "--gradient_accumulation_steps=2",      #can change to 4 if needed
-        "--train_text_encoder",         #necessary for faces
+        #"--train_text_encoder",         #necessary for faces
         "--mixed_precision=fp16",
         "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
