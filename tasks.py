@@ -107,7 +107,7 @@ def generate_images_task(self, req_data: dict):
         # We'll store these final images in: e.g. output_dir + "/inference"
         inference_dir = os.path.join(output_dir, "inference_output")
         run_inference(
-            base_model="stabilityai/stable-diffusion-3-medium-diffusers",
+            base_model=output_dir,
             lora_weights_path=os.path.join(output_dir, "pytorch_lora_weights.safetensors"),
             prompt=inference_prompt,
             outdir=inference_dir,
