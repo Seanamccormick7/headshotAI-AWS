@@ -10,7 +10,7 @@ def run_inference(
     outdir="inference_output",
     num_images=5, #will change to 100 in production
     guidance_scale=7.5,
-    num_inference_steps=30,
+    num_inference_steps=75,
     torch_dtype=torch.float16,
 ):
     """

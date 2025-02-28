@@ -30,11 +30,11 @@ def run_training(
         "dreambooth/train_dreambooth_sd3.py",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3-medium-diffusers",
         "--with_prior_preservation",
-        "--prior_loss_weight=1.0",
+        "--prior_loss_weight=0.5",
         "--resolution=512",         #can change to 768 for better resolution
         "--train_batch_size=1",     
         "--gradient_accumulation_steps=2",      #can change to 4 if needed
-        #"--train_text_encoder",         #necessary for faces
+        #"--train_text_encoder",         #not working for now
         "--mixed_precision=fp16",
         "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
