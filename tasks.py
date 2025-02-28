@@ -65,26 +65,25 @@ def generate_images_task(self, req_data: dict):
         backgrounds = req_data.get("backgrounds", "")
         glasses = req_data.get("glasses", False)
         glasses_str = "wearing glasses" if glasses else "no glasses"
-
+        
         # class_prompt used for prior preservation
         class_prompt = "Photo of a person"
         # instance prompt Used to learn the specific subject (the user-uploaded photos).
-        instance_prompt = (
-            f"Photo of a sks {age_str}{gender} with {hairColor} hair "
-            f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
-        )   
+        #instance_prompt = (
+        #    f"Photo of a sks {age_str}{gender} with {hairColor} hair "
+        #    f"({hairLength}), of {ethnicity} ethnicity, {bodyType} build, {glasses_str}."
+        #)   
+        instance_prompt = "Photo of a sks person" 
 
         # The final prompt for generating images after training
         inference_prompt = (
-            f"Professional studio headshot of the sks {age_str}{gender} with {hairColor} hair "
-            f"({hairLength}), {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
-            f"wearing {attire}, in {backgrounds}, shot with professional lighting, "
+            f"Professional studio headshot of the sks person wearing {attire}, in {backgrounds}, shot with professional lighting, "
             f"high detail, 4k, sharp focus, DSLR, professional portrait photography, "
             f"high-end editorial photography, trending on artstation, highly detailed"
         )
 
         # 4) Set training steps
-        training_steps = 1600  # can increase to 1200 if not working
+        training_steps = 1200  # can increase to 1200 if not working
 
         # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
