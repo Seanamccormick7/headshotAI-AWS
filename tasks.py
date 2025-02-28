@@ -84,7 +84,7 @@ def generate_images_task(self, req_data: dict):
         )
 
         # 4) Set training steps
-        training_steps = 1200
+        training_steps = 1200  # can increase to 1200 if not working
 
         # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
