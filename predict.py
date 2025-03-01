@@ -28,6 +28,8 @@ def run_training(
     cmd = [
         "accelerate", "launch",
         "dreambooth/train_dreambooth_sd3.py",
+        "--train_text_encoder",
+        "--train_clip_encoders_only",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3-medium-diffusers",
         "--with_prior_preservation",
         "--prior_loss_weight=0.5",

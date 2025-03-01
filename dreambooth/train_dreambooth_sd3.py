@@ -388,6 +388,12 @@ def parse_args(input_args=None):
         action="store_true",
         help="Whether to train the text encoder. If set, the text encoder should be float32 precision.",
     )
+    # Add new argument for training only CLIP encoders
+    parser.add_argument(
+        "--train_clip_encoders_only",
+        action="store_true",
+        help="Whether to train only the CLIP text encoders (freeze T5). Only effective when --train_text_encoder is set.",
+    )
     parser.add_argument(
         "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
     )
@@ -644,6 +650,10 @@ def parse_args(input_args=None):
             warnings.warn("You need not use --class_data_dir without --with_prior_preservation.")
         if args.class_prompt is not None:
             warnings.warn("You need not use --class_prompt without --with_prior_preservation.")
+
+    # Validate the new train_clip_encoders_only argument
+    if args.train_clip_encoders_only and not args.train_text_encoder:
+        warnings.warn("--train_clip_encoders_only is ignored when --train_text_encoder is not set.")
 
     return args
 
@@ -1149,16 +1159,30 @@ def main(args):
         args.pretrained_model_name_or_path, subfolder="transformer", revision=args.revision, variant=args.variant
     )
 
+    # SET TRAINING FLAGS
     transformer.requires_grad_(True)
     vae.requires_grad_(False)
+    
+    # Ensure text encoders are in the appropriate precision when training
     if args.train_text_encoder:
-        text_encoder_one.requires_grad_(True)
-        text_encoder_two.requires_grad_(True)
-        text_encoder_three.requires_grad_(True)
+        if args.train_clip_encoders_only:
+            # Only train CLIP encoders, freeze T5
+            text_encoder_one.requires_grad_(True)
+            text_encoder_two.requires_grad_(True)
+            text_encoder_three.requires_grad_(False)
+            logger.info("Training only CLIP text encoders. T5 encoder is frozen.")
+        else:
+            # Train all text encoders
+            text_encoder_one.requires_grad_(True)
+            text_encoder_two.requires_grad_(True)
+            text_encoder_three.requires_grad_(True)
+            logger.info("Training all text encoders (CLIP and T5).")
     else:
+        # Freeze all text encoders
         text_encoder_one.requires_grad_(False)
         text_encoder_two.requires_grad_(False)
         text_encoder_three.requires_grad_(False)
+        logger.info("Not training any text encoders.")
 
     # For mixed precision training we cast all non-trainable weights (vae, non-lora text_encoder and non-lora transformer) to half-precision
     # as these weights are only used for inference, keeping weights in full precision is not required.
@@ -1174,18 +1198,33 @@ def main(args):
             "Mixed precision training with bfloat16 is not supported on MPS. Please use fp16 (recommended) or fp32 instead."
         )
 
+    # Always use float32 for VAE
     vae.to(accelerator.device, dtype=torch.float32)
+    
+    # Only cast non-trainable text encoders to weight_dtype
     if not args.train_text_encoder:
         text_encoder_one.to(accelerator.device, dtype=weight_dtype)
         text_encoder_two.to(accelerator.device, dtype=weight_dtype)
         text_encoder_three.to(accelerator.device, dtype=weight_dtype)
+    else:
+        # Keep trainable text encoders in float32 for better stability
+        text_encoder_one.to(accelerator.device, dtype=torch.float32)
+        text_encoder_two.to(accelerator.device, dtype=torch.float32)
+        
+        if args.train_clip_encoders_only:
+            # When only training CLIP encoders, we can cast T5 to weight_dtype since it's frozen
+            text_encoder_three.to(accelerator.device, dtype=weight_dtype)
+        else:
+            # When training T5, keep it in float32
+            text_encoder_three.to(accelerator.device, dtype=torch.float32)
 
     if args.gradient_checkpointing:
         transformer.enable_gradient_checkpointing()
         if args.train_text_encoder:
             text_encoder_one.gradient_checkpointing_enable()
             text_encoder_two.gradient_checkpointing_enable()
-            text_encoder_three.gradient_checkpointing_enable()
+            if not args.train_clip_encoders_only:
+                text_encoder_three.gradient_checkpointing_enable()
 
     def unwrap_model(model):
         model = accelerator.unwrap_model(model)
@@ -1261,8 +1300,13 @@ def main(args):
 
     # Optimization parameters
     transformer_parameters_with_lr = {"params": transformer.parameters(), "lr": args.learning_rate}
+    
+    # Setup parameters for optimization
     if args.train_text_encoder:
-        # different learning rate for text encoder and unet
+        # Setup parameters for text encoders
+        params_to_optimize = [transformer_parameters_with_lr]
+        
+        # Add CLIP text encoders (always trainable when train_text_encoder is True)
         text_parameters_one_with_lr = {
             "params": text_encoder_one.parameters(),
             "weight_decay": args.adam_weight_decay_text_encoder,
@@ -1273,18 +1317,18 @@ def main(args):
             "weight_decay": args.adam_weight_decay_text_encoder,
             "lr": args.text_encoder_lr if args.text_encoder_lr else args.learning_rate,
         }
-        text_parameters_three_with_lr = {
-            "params": text_encoder_three.parameters(),
-            "weight_decay": args.adam_weight_decay_text_encoder,
-            "lr": args.text_encoder_lr if args.text_encoder_lr else args.learning_rate,
-        }
-        params_to_optimize = [
-            transformer_parameters_with_lr,
-            text_parameters_one_with_lr,
-            text_parameters_two_with_lr,
-            text_parameters_three_with_lr,
-        ]
+        params_to_optimize.extend([text_parameters_one_with_lr, text_parameters_two_with_lr])
+        
+        # Add T5 encoder only if not training just CLIP encoders
+        if not args.train_clip_encoders_only:
+            text_parameters_three_with_lr = {
+                "params": text_encoder_three.parameters(),
+                "weight_decay": args.adam_weight_decay_text_encoder,
+                "lr": args.text_encoder_lr if args.text_encoder_lr else args.learning_rate,
+            }
+            params_to_optimize.append(text_parameters_three_with_lr)
     else:
+        # Only optimize transformer
         params_to_optimize = [transformer_parameters_with_lr]
 
     # Optimizer creation
@@ -1339,11 +1383,9 @@ def main(args):
                 f" {args.text_encoder_lr} and learning_rate: {args.learning_rate}. "
                 f"When using prodigy only learning_rate is used as the initial learning rate."
             )
-            # changes the learning rate of text_encoder_parameters_one and text_encoder_parameters_two to be
-            # --learning_rate
-            params_to_optimize[1]["lr"] = args.learning_rate
-            params_to_optimize[2]["lr"] = args.learning_rate
-            params_to_optimize[3]["lr"] = args.learning_rate
+            # changes the learning rate of text_encoder_parameters to be --learning_rate
+            for param_group in params_to_optimize[1:]:
+                param_group["lr"] = args.learning_rate
 
         optimizer = optimizer_class(
             params_to_optimize,
@@ -1454,23 +1496,44 @@ def main(args):
 
     # Prepare everything with our `accelerator`.
     if args.train_text_encoder:
-        (
-            transformer,
-            text_encoder_one,
-            text_encoder_two,
-            text_encoder_three,
-            optimizer,
-            train_dataloader,
-            lr_scheduler,
-        ) = accelerator.prepare(
-            transformer,
-            text_encoder_one,
-            text_encoder_two,
-            text_encoder_three,
-            optimizer,
-            train_dataloader,
-            lr_scheduler,
-        )
+        if args.train_clip_encoders_only:
+            # Prepare only CLIP text encoders
+            (
+                transformer,
+                text_encoder_one,
+                text_encoder_two,
+                optimizer,
+                train_dataloader,
+                lr_scheduler,
+            ) = accelerator.prepare(
+                transformer,
+                text_encoder_one,
+                text_encoder_two,
+                optimizer,
+                train_dataloader,
+                lr_scheduler,
+            )
+            # Separately prepare T5 encoder for inference
+            text_encoder_three = accelerator.prepare_model(text_encoder_three, evaluation_mode=True)
+        else:
+            # Prepare all text encoders
+            (
+                transformer,
+                text_encoder_one,
+                text_encoder_two,
+                text_encoder_three,
+                optimizer,
+                train_dataloader,
+                lr_scheduler,
+            ) = accelerator.prepare(
+                transformer,
+                text_encoder_one,
+                text_encoder_two,
+                text_encoder_three,
+                optimizer,
+                train_dataloader,
+                lr_scheduler,
+            )
     else:
         transformer, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
             transformer, optimizer, train_dataloader, lr_scheduler
@@ -1500,6 +1563,16 @@ def main(args):
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
+    
+    # Log text encoder training configuration
+    if args.train_text_encoder:
+        if args.train_clip_encoders_only:
+            logger.info("  Training only CLIP text encoders (1 & 2), T5 encoder is frozen")
+        else:
+            logger.info("  Training all text encoders (CLIP 1 & 2 and T5)")
+    else:
+        logger.info("  Not training any text encoders")
+        
     global_step = 0
     first_epoch = 0
 
@@ -1555,12 +1628,19 @@ def main(args):
         if args.train_text_encoder:
             text_encoder_one.train()
             text_encoder_two.train()
-            text_encoder_three.train()
+            if not args.train_clip_encoders_only:
+                text_encoder_three.train()
 
         for step, batch in enumerate(train_dataloader):
-            models_to_accumulate = [transformer]
+            # Define which models to accumulate gradients for
             if args.train_text_encoder:
-                models_to_accumulate.extend([text_encoder_one, text_encoder_two, text_encoder_three])
+                if args.train_clip_encoders_only:
+                    models_to_accumulate = [transformer, text_encoder_one, text_encoder_two]
+                else:
+                    models_to_accumulate = [transformer, text_encoder_one, text_encoder_two, text_encoder_three]
+            else:
+                models_to_accumulate = [transformer]
+                
             with accelerator.accumulate(models_to_accumulate):
                 pixel_values = batch["pixel_values"].to(dtype=vae.dtype)
                 prompts = batch["prompts"]
@@ -1612,13 +1692,61 @@ def main(args):
                         return_dict=False,
                     )[0]
                 else:
-                    prompt_embeds, pooled_prompt_embeds = encode_prompt(
-                        text_encoders=[text_encoder_one, text_encoder_two, text_encoder_three],
-                        tokenizers=[tokenizer_one, tokenizer_two, tokenizer_three],
-                        prompt=None,
-                        max_sequence_length=args.max_sequence_length,
-                        text_input_ids_list=[tokens_one, tokens_two, tokens_three],
-                    )
+                    # Get text encoders based on training configuration
+                    if args.train_clip_encoders_only:
+                        # Use only CLIP encoders for training, T5 for inference
+                        text_encoders_list = [text_encoder_one, text_encoder_two]
+                        tokenizers_list = [tokenizer_one, tokenizer_two]
+                        text_input_ids_list = [tokens_one, tokens_two]
+                        
+                        # Get embeddings from trainable CLIP encoders
+                        with torch.set_grad_enabled(True):
+                            clip_prompt_embeds_list = []
+                            clip_pooled_prompt_embeds_list = []
+                            
+                            for i, (tokenizer, text_encoder) in enumerate(zip(tokenizers_list, text_encoders_list)):
+                                prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
+                                    text_encoder=text_encoder,
+                                    tokenizer=tokenizer,
+                                    prompt=None,
+                                    device=accelerator.device,
+                                    num_images_per_prompt=1,
+                                    text_input_ids=text_input_ids_list[i],
+                                )
+                                clip_prompt_embeds_list.append(prompt_embeds)
+                                clip_pooled_prompt_embeds_list.append(pooled_prompt_embeds)
+                                
+                            clip_prompt_embeds = torch.cat(clip_prompt_embeds_list, dim=-1)
+                            pooled_prompt_embeds = torch.cat(clip_pooled_prompt_embeds_list, dim=-1)
+                        
+                        # Get T5 embeddings with no gradients (inference only)
+                        with torch.no_grad():
+                            t5_prompt_embed = _encode_prompt_with_t5(
+                                text_encoder_three,
+                                tokenizer_three,
+                                args.max_sequence_length,
+                                prompt=None,
+                                num_images_per_prompt=1,
+                                device=accelerator.device,
+                                text_input_ids=tokens_three,
+                            )
+                            
+                        # Combine embeddings
+                        clip_prompt_embeds = torch.nn.functional.pad(
+                            clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1])
+                        )
+                        prompt_embeds = torch.cat([clip_prompt_embeds, t5_prompt_embed], dim=-2)
+                    else:
+                        # Train all encoders
+                        prompt_embeds, pooled_prompt_embeds = encode_prompt(
+                            text_encoders=[text_encoder_one, text_encoder_two, text_encoder_three],
+                            tokenizers=[tokenizer_one, tokenizer_two, tokenizer_three],
+                            prompt=None,
+                            max_sequence_length=args.max_sequence_length,
+                            text_input_ids_list=[tokens_one, tokens_two, tokens_three],
+                        )
+                    
+                    # Forward pass through transformer
                     model_pred = transformer(
                         hidden_states=noisy_model_input,
                         timestep=timesteps,
@@ -1669,16 +1797,23 @@ def main(args):
 
                 accelerator.backward(loss)
                 if accelerator.sync_gradients:
-                    params_to_clip = (
-                        itertools.chain(
-                            transformer.parameters(),
-                            text_encoder_one.parameters(),
-                            text_encoder_two.parameters(),
-                            text_encoder_three.parameters(),
-                        )
-                        if args.train_text_encoder
-                        else transformer.parameters()
-                    )
+                    if args.train_text_encoder:
+                        if args.train_clip_encoders_only:
+                            params_to_clip = itertools.chain(
+                                transformer.parameters(),
+                                text_encoder_one.parameters(),
+                                text_encoder_two.parameters(),
+                            )
+                        else:
+                            params_to_clip = itertools.chain(
+                                transformer.parameters(),
+                                text_encoder_one.parameters(),
+                                text_encoder_two.parameters(),
+                                text_encoder_three.parameters(),
+                            )
+                    else:
+                        params_to_clip = transformer.parameters()
+                        
                     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
 
                 optimizer.step()
