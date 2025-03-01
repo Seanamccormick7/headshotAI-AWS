@@ -880,19 +880,28 @@ def _encode_prompt_with_t5(
     prompt=None,
     num_images_per_prompt=1,
     device=None,
+    text_input_ids=None,
 ):
-    prompt = [prompt] if isinstance(prompt, str) else prompt
-    batch_size = len(prompt)
+    # Use existing text_input_ids if provided, otherwise tokenize the prompt
+    if text_input_ids is None:
+        if prompt is None:
+            raise ValueError("Either prompt or text_input_ids must be provided")
+        
+        prompt = [prompt] if isinstance(prompt, str) else prompt
+        batch_size = len(prompt)
 
-    text_inputs = tokenizer(
-        prompt,
-        padding="max_length",
-        max_length=max_sequence_length,
-        truncation=True,
-        add_special_tokens=True,
-        return_tensors="pt",
-    )
-    text_input_ids = text_inputs.input_ids
+        text_inputs = tokenizer(
+            prompt,
+            padding="max_length",
+            max_length=max_sequence_length,
+            truncation=True,
+            add_special_tokens=True,
+            return_tensors="pt",
+        )
+        text_input_ids = text_inputs.input_ids
+    else:
+        batch_size = text_input_ids.shape[0]
+        
     prompt_embeds = text_encoder(text_input_ids.to(device))[0]
 
     dtype = text_encoder.dtype
@@ -918,25 +927,26 @@ def _encode_prompt_with_clip(
     if prompt is not None:
         prompt = [prompt] if isinstance(prompt, str) else prompt
         batch_size = len(prompt)  # if prompt is not None
+        
+        # Only tokenize if we have a prompt
+        if tokenizer is not None:
+            text_inputs = tokenizer(
+                prompt,
+                padding="max_length",
+                max_length=77,
+                truncation=True,
+                return_tensors="pt",
+            )
+            text_input_ids = text_inputs.input_ids
     else:
         # If we're given text_input_ids directly, infer batch size from that:
         if text_input_ids is not None:
             batch_size = text_input_ids.shape[0]
         else:
             raise ValueError("Must provide either prompt (string) or text_input_ids (Tensor).")
-
-    if tokenizer is not None:
-        text_inputs = tokenizer(
-            prompt,
-            padding="max_length",
-            max_length=77,
-            truncation=True,
-            return_tensors="pt",
-        )
-
-        text_input_ids = text_inputs.input_ids
-    else:
-        if text_input_ids is None:
+        
+        # If no tokenizer or no prompt, ensure text_input_ids exists
+        if tokenizer is None and text_input_ids is None:
             raise ValueError("text_input_ids must be provided when the tokenizer is not specified")
 
     prompt_embeds = text_encoder(text_input_ids.to(device), output_hidden_states=True)
@@ -962,7 +972,9 @@ def encode_prompt(
     num_images_per_prompt: int = 1,
     text_input_ids_list=None,
 ):
-    prompt = [prompt] if isinstance(prompt, str) else prompt
+    # Ensure prompt is a list if it's a string or None
+    if prompt is not None:
+        prompt = [prompt] if isinstance(prompt, str) else prompt
 
     if tokenizers is None:
        clip_tokenizers = [None, None]
@@ -974,28 +986,59 @@ def encode_prompt(
     clip_prompt_embeds_list = []
     clip_pooled_prompt_embeds_list = []
     for i, (tokenizer, text_encoder) in enumerate(zip(clip_tokenizers, clip_text_encoders)):
-        prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            prompt=prompt,
-            device=device if device is not None else text_encoder.device,
-            num_images_per_prompt=num_images_per_prompt,
-            text_input_ids=text_input_ids_list[i] if text_input_ids_list else None,
-        )
+        # Choose whether to use text_input_ids or prompt
+        use_text_input_ids = text_input_ids_list is not None and i < len(text_input_ids_list) and text_input_ids_list[i] is not None
+        
+        if use_text_input_ids:
+            # If we have text_input_ids, use those directly
+            prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
+                text_encoder=text_encoder,
+                tokenizer=None,  # Don't need tokenizer when using input_ids directly
+                prompt=None,
+                device=device if device is not None else text_encoder.device,
+                num_images_per_prompt=num_images_per_prompt,
+                text_input_ids=text_input_ids_list[i],
+            )
+        else:
+            # Otherwise use the prompt with the tokenizer
+            if prompt is None:
+                raise ValueError("Either prompt or text_input_ids_list must be provided")
+                
+            prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
+                text_encoder=text_encoder,
+                tokenizer=tokenizer,
+                prompt=prompt,
+                device=device if device is not None else text_encoder.device,
+                num_images_per_prompt=num_images_per_prompt,
+                text_input_ids=None,
+            )
+            
         clip_prompt_embeds_list.append(prompt_embeds)
         clip_pooled_prompt_embeds_list.append(pooled_prompt_embeds)
 
     clip_prompt_embeds = torch.cat(clip_prompt_embeds_list, dim=-1)
     pooled_prompt_embeds = torch.cat(clip_pooled_prompt_embeds_list, dim=-1)
 
-    t5_prompt_embed = _encode_prompt_with_t5(
-        text_encoders[-1],
-        tokenizers[-1],
-        max_sequence_length,
-        prompt=prompt,
-        num_images_per_prompt=num_images_per_prompt,
-        device=device if device is not None else text_encoders[-1].device,
-    )
+    # Handle the T5 encoder in a similar way
+    if text_input_ids_list is not None and len(text_input_ids_list) > 2 and text_input_ids_list[2] is not None:
+        t5_prompt_embed = _encode_prompt_with_t5(
+            text_encoders[-1],
+            tokenizers[-1],
+            max_sequence_length,
+            prompt=None,
+            num_images_per_prompt=num_images_per_prompt,
+            device=device if device is not None else text_encoders[-1].device,
+            text_input_ids=text_input_ids_list[2],
+        )
+    else:
+        t5_prompt_embed = _encode_prompt_with_t5(
+            text_encoders[-1],
+            tokenizers[-1],
+            max_sequence_length,
+            prompt=prompt,
+            num_images_per_prompt=num_images_per_prompt,
+            device=device if device is not None else text_encoders[-1].device,
+        )
 
     clip_prompt_embeds = torch.nn.functional.pad(
         clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1])
@@ -1705,14 +1748,25 @@ def main(args):
                             clip_pooled_prompt_embeds_list = []
                             
                             for i, (tokenizer, text_encoder) in enumerate(zip(tokenizers_list, text_encoders_list)):
-                                prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
-                                    text_encoder=text_encoder,
-                                    tokenizer=tokenizer,
-                                    prompt=None,
-                                    device=accelerator.device,
-                                    num_images_per_prompt=1,
-                                    text_input_ids=text_input_ids_list[i],
-                                )
+                                # Don't send None for both prompt and tokenizer
+                                if text_input_ids_list[i] is not None:
+                                    prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
+                                        text_encoder=text_encoder,
+                                        tokenizer=None,  # Use None for tokenizer when using text_input_ids
+                                        prompt=None,  
+                                        device=accelerator.device,
+                                        num_images_per_prompt=1,
+                                        text_input_ids=text_input_ids_list[i],
+                                    )
+                                else:
+                                    # Fallback if needed
+                                    prompt_embeds, pooled_prompt_embeds = _encode_prompt_with_clip(
+                                        text_encoder=text_encoder,
+                                        tokenizer=tokenizer,
+                                        prompt=prompts,  # Use actual prompts here instead of None
+                                        device=accelerator.device,
+                                        num_images_per_prompt=1,
+                                    )
                                 clip_prompt_embeds_list.append(prompt_embeds)
                                 clip_pooled_prompt_embeds_list.append(pooled_prompt_embeds)
                                 
@@ -1721,15 +1775,26 @@ def main(args):
                         
                         # Get T5 embeddings with no gradients (inference only)
                         with torch.no_grad():
-                            t5_prompt_embed = _encode_prompt_with_t5(
-                                text_encoder_three,
-                                tokenizer_three,
-                                args.max_sequence_length,
-                                prompt=None,
-                                num_images_per_prompt=1,
-                                device=accelerator.device,
-                                text_input_ids=tokens_three,
-                            )
+                            # Use actual prompts if tokens_three is None
+                            if tokens_three is not None:
+                                t5_prompt_embed = _encode_prompt_with_t5(
+                                    text_encoder_three,
+                                    tokenizer_three,
+                                    args.max_sequence_length,
+                                    prompt=None,
+                                    num_images_per_prompt=1,
+                                    device=accelerator.device,
+                                    text_input_ids=tokens_three,
+                                )
+                            else:
+                                t5_prompt_embed = _encode_prompt_with_t5(
+                                    text_encoder_three,
+                                    tokenizer_three,
+                                    args.max_sequence_length,
+                                    prompt=prompts,  # Use actual prompts here
+                                    num_images_per_prompt=1,
+                                    device=accelerator.device,
+                                )
                             
                         # Combine embeddings
                         clip_prompt_embeds = torch.nn.functional.pad(
