@@ -37,14 +37,12 @@ def run_training(
         "--resolution=512",         #can change to 768 for better resolution
         "--train_batch_size=1",     
         "--gradient_accumulation_steps=2",      #can change to 4 if needed
-        #"--train_text_encoder",         #not working for now
         "--mixed_precision=fp16",
         "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
-        "--learning_rate=2e-6",     #or 2e-6 if not working well
+        "--learning_rate=1e-6",     #or 2e-6 if not working well
+        "--text_encoder_lr=3e-6",
         "--lr_warmup_steps=100",
-        f"--validation_prompt={inference_prompt}",
-        "--validation_epochs=5",
         "--lr_scheduler=constant",
         "--seed=40",
         "--report_to=tensorboard",
