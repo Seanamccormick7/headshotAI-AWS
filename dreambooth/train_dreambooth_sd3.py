@@ -24,6 +24,7 @@ import shutil
 import warnings
 from contextlib import nullcontext
 from pathlib import Path
+import subprocess
 
 import numpy as np
 import torch
@@ -176,12 +177,26 @@ def log_validation(
 
     # run inference
     generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
-    # autocast_ctx = torch.autocast(accelerator.device.type) if not is_final_validation else nullcontext()
     autocast_ctx = nullcontext()
+    
+    # Create validation directory for saving images
+    validation_dir = os.path.join(args.output_dir, f"validation_epoch_{epoch}")
+    if accelerator.is_main_process:
+        os.makedirs(validation_dir, exist_ok=True)
 
     with autocast_ctx:
-        images = [pipeline(**pipeline_args, generator=generator).images[0] for _ in range(args.num_validation_images)]
+        images = []
+        for i in range(args.num_validation_images):
+            image = pipeline(**pipeline_args, generator=generator).images[0]
+            images.append(image)
+            
+            # Save the validation image to disk
+            if accelerator.is_main_process:
+                save_path = os.path.join(validation_dir, f"validation_{epoch}_{i}.png")
+                image.save(save_path)
+                logger.info(f"Saved validation image to {save_path}")
 
+    # Log to trackers (tensorboard, etc.)
     for tracker in accelerator.trackers:
         phase_name = "test" if is_final_validation else "validation"
         if tracker.name == "tensorboard":
@@ -199,7 +214,7 @@ def log_validation(
     del pipeline
     free_memory()
 
-    return images
+    return images, validation_dir  # Return the directory to allow for further processing
 
 
 def import_model_class_from_model_name_or_path(
@@ -621,6 +636,29 @@ def parse_args(input_args=None):
             "Choose prior generation precision between fp32, fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
             " 1.10.and an Nvidia Ampere GPU.  Default to  fp16 if a GPU is available else fp32."
         ),
+    )
+    parser.add_argument(
+        "--upload_validation_images",
+        action="store_true",
+        help="Whether to save and process validation images similarly to final inference images",
+    )
+    parser.add_argument(
+        "--inference_script_path",
+        type=str,
+        default=None,
+        help="Path to the inference script to use for processing validation images",
+    )
+    parser.add_argument(
+        "--validation_guidance_scale",
+        type=float,
+        default=7.5,
+        help="Guidance scale to use for validation image generation",
+    )
+    parser.add_argument(
+        "--validation_inference_steps",
+        type=int,
+        default=40,
+        help="Number of inference steps to use for validation image generation",
     )
     parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
 
@@ -1925,7 +1963,7 @@ def main(args):
 
         if accelerator.is_main_process:
             if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
-                # create pipeline
+                # Create pipeline
                 if not args.train_text_encoder:
                     text_encoder_one, text_encoder_two, text_encoder_three = load_text_encoders(
                         text_encoder_cls_one, text_encoder_cls_two, text_encoder_cls_three
@@ -1945,7 +1983,9 @@ def main(args):
                     torch_dtype=weight_dtype,
                 )
                 pipeline_args = {"prompt": args.validation_prompt}
-                images = log_validation(
+                
+                # Get images and validation directory
+                images, validation_dir = log_validation(
                     pipeline=pipeline,
                     args=args,
                     accelerator=accelerator,
@@ -1953,6 +1993,36 @@ def main(args):
                     epoch=epoch,
                     torch_dtype=weight_dtype,
                 )
+                
+                # Process and upload validation images if needed
+                if args.upload_validation_images and hasattr(args, "inference_script_path") and os.path.exists(validation_dir):
+                    logger.info(f"Running external inference process on validation images from epoch {epoch}")
+                    try:
+                        # Option 1: You can directly call your run_inference function if it's importable
+                        # from inference import run_inference
+                        # run_inference(
+                        #     base_model=args.output_dir,
+                        #     prompt=args.validation_prompt,
+                        #     outdir=validation_dir,  # reuse the same directory
+                        #     num_images=0,  # set to 0 to skip generating new images, just process existing ones
+                        #     guidance_scale=7.5,
+                        #     num_inference_steps=40,
+                        # )
+                        
+                        # Option 2: Or call it as a subprocess
+                        subprocess.run([
+                            "python", args.inference_script_path,
+                            "--model_path", args.output_dir,
+                            "--prompt", args.validation_prompt,
+                            "--input_dir", validation_dir,  # path to already generated images
+                            "--process_only",  # flag to indicate we're just processing existing images
+                            "--epoch", str(epoch),
+                        ], check=True)
+                        
+                        logger.info(f"Successfully processed validation images from epoch {epoch}")
+                    except Exception as e:
+                        logger.error(f"Error processing validation images: {str(e)}")
+                
                 if not args.train_text_encoder:
                     del text_encoder_one, text_encoder_two, text_encoder_three
                     free_memory()

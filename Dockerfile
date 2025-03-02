@@ -21,6 +21,9 @@ RUN pip3 install hf_transfer
 # Install the project dependencies
 RUN pip3 install -r dreambooth/requirements.txt
 
+COPY container_monitor.py /app/
+RUN chmod +x /app/container_monitor.py
+
 # Create accelerate config file directly
 RUN mkdir -p /root/.cache/huggingface/accelerate
 RUN echo '{\n\
