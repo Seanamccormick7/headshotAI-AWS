@@ -84,7 +84,7 @@ def generate_images_task(self, req_data: dict):
         )
 
         # 4) Set training steps
-        training_steps = 800  # just to check if train-text-encoder works, will increase to 2000 in production
+        training_steps = 1200  # just to check if train-text-encoder works, will increase to 2000 in production
 
         # 5) Create output directory
         output_dir = tempfile.mkdtemp(prefix="trained_model_")
@@ -93,6 +93,7 @@ def generate_images_task(self, req_data: dict):
         train_output = run_training(
             instance_data=zip_path,
             instance_prompt=instance_prompt,
+            inference_prompt=inference_prompt,
             steps=training_steps,
             output_dir=output_dir,
             class_prompt=class_prompt,
@@ -112,7 +113,7 @@ def generate_images_task(self, req_data: dict):
             outdir=inference_dir,
             num_images=5,  # doing 5 just for testing, change to 100 in production
             guidance_scale=7.5,
-            num_inference_steps=30,
+            num_inference_steps=40,
             torch_dtype=torch.float16,
         )
 

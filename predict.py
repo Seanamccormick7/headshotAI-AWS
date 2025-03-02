@@ -7,6 +7,7 @@ import shutil
 def run_training(
     instance_data: str,
     instance_prompt: str,
+    inference_prompt: str,
     steps: int = 10, #default value (can actually change in tasks.py)
     output_dir: str = "trained_model",
     class_prompt: str = None,  # Added class prompt parameter
@@ -40,7 +41,10 @@ def run_training(
         "--mixed_precision=fp16",
         "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
-        "--learning_rate=5e-6",     #or 2e-6 if not working well
+        "--learning_rate=2e-6",     #or 2e-6 if not working well
+        "--lr_warmup_steps=100",
+        f"--validation_prompt={inference_prompt}",
+        "--validation_epochs=5",
         "--lr_scheduler=constant",
         "--seed=40",
         "--report_to=tensorboard",
