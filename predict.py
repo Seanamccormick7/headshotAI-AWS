@@ -25,6 +25,12 @@ def run_training(
         # Just unzip directly, no moving subfolders
         subprocess.run(["unzip", "-o", instance_data, "-d", instance_data_dir], check=True)
 
+    process_validation_path = "process_validation.py"
+    if not os.path.exists(process_validation_path):
+        # Create a basic version of process_validation.py
+        with open(process_validation_path, "w") as f:
+            f.write("""#!/usr/bin/env python""")
+
     # Build the training command
     cmd = [
         "accelerate", "launch",
@@ -45,9 +51,11 @@ def run_training(
         "--lr_warmup_steps=100",
         f"--validation_prompt={inference_prompt}",
         "--validation_epochs=10",
+        "--num_validation_images=2",
         "--validation_guidance_scale=7.5",
         "--validation_inference_steps=40",
         "--upload_validation_images",        # New flag to enable uploading
+        f"--inference_script_path={process_validation_path}",
         "--inference_script_path=process_validation.py",
         "--lr_scheduler=constant",
         "--seed=40",

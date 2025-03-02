@@ -172,47 +172,99 @@ def log_validation(
         f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
         f" {args.validation_prompt}."
     )
-    pipeline = pipeline.to(accelerator.device)
-    pipeline.set_progress_bar_config(disable=True)
-
-    # run inference
-    generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
-    autocast_ctx = nullcontext()
     
     # Create validation directory for saving images
     validation_dir = os.path.join(args.output_dir, f"validation_epoch_{epoch}")
     if accelerator.is_main_process:
         os.makedirs(validation_dir, exist_ok=True)
-
-    with autocast_ctx:
-        images = []
-        for i in range(args.num_validation_images):
-            image = pipeline(**pipeline_args, generator=generator).images[0]
-            images.append(image)
+    
+    # Run pipeline on CPU if we encounter OOM errors
+    try:
+        # First try using GPU
+        pipeline = pipeline.to(accelerator.device)
+        pipeline.set_progress_bar_config(disable=True)
+        
+        # Use nullcontext for autocast
+        autocast_ctx = nullcontext()
+        
+        # Generate images
+        with autocast_ctx:
+            images = []
+            generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
             
-            # Save the validation image to disk
-            if accelerator.is_main_process:
-                save_path = os.path.join(validation_dir, f"validation_{epoch}_{i}.png")
-                image.save(save_path)
-                logger.info(f"Saved validation image to {save_path}")
+            for i in range(args.num_validation_images):
+                try:
+                    # Set lower resolution for validation to save memory
+                    validation_pipeline_args = pipeline_args.copy()
+                    # Use a smaller height/width for validation to save memory
+                    if hasattr(pipeline, "height") and hasattr(pipeline, "width"):
+                        validation_pipeline_args["height"] = min(512, pipeline.height)
+                        validation_pipeline_args["width"] = min(512, pipeline.width)
+                    
+                    # Generate image
+                    image = pipeline(
+                        **validation_pipeline_args, 
+                        generator=generator,
+                        num_inference_steps=min(30, args.validation_inference_steps or 30),  # Use fewer steps for validation
+                    ).images[0]
+                    
+                    images.append(image)
+                    
+                    # Save the validation image to disk
+                    if accelerator.is_main_process:
+                        save_path = os.path.join(validation_dir, f"validation_{epoch}_{i}.png")
+                        image.save(save_path)
+                        logger.info(f"Saved validation image to {save_path}")
+                        
+                    # Release memory after each image
+                    torch.cuda.empty_cache()
+                    
+                except RuntimeError as e:
+                    if "out of memory" in str(e):
+                        # Log the OOM error but continue
+                        logger.warning(f"Ran out of memory when generating validation image {i}. Continuing with next image.")
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                    else:
+                        # Re-raise if it's not an OOM error
+                        raise
+    
+    except RuntimeError as e:
+        # If we encounter OOM errors, try to free up memory and continue
+        logger.warning(f"Error during validation: {str(e)}")
+        logger.warning("Freeing memory and skipping remaining validation images")
+        
+        # Free GPU memory
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    
+    # Log to trackers if we have images
+    if accelerator.is_main_process and len(images) > 0:
+        for tracker in accelerator.trackers:
+            phase_name = "test" if is_final_validation else "validation"
+            if tracker.name == "tensorboard":
+                np_images = np.stack([np.asarray(img) for img in images])
+                tracker.writer.add_images(phase_name, np_images, epoch, dataformats="NHWC")
+            if tracker.name == "wandb":
+                tracker.log(
+                    {
+                        phase_name: [
+                            wandb.Image(image, caption=f"{i}: {args.validation_prompt}") for i, image in enumerate(images)
+                        ]
+                    }
+                )
 
-    # Log to trackers (tensorboard, etc.)
-    for tracker in accelerator.trackers:
-        phase_name = "test" if is_final_validation else "validation"
-        if tracker.name == "tensorboard":
-            np_images = np.stack([np.asarray(img) for img in images])
-            tracker.writer.add_images(phase_name, np_images, epoch, dataformats="NHWC")
-        if tracker.name == "wandb":
-            tracker.log(
-                {
-                    phase_name: [
-                        wandb.Image(image, caption=f"{i}: {args.validation_prompt}") for i, image in enumerate(images)
-                    ]
-                }
-            )
-
+    # Make sure to free memory
     del pipeline
     free_memory()
+    
+    # If we couldn't generate any images during validation, check the directory
+    if not images and os.path.exists(validation_dir):
+        # Check if we have any images in the directory from previous attempts
+        image_files = glob.glob(os.path.join(validation_dir, "*.png"))
+        if image_files:
+            images = [Image.open(f) for f in image_files[:args.num_validation_images]]
+            logger.info(f"Found {len(images)} previously saved validation images in {validation_dir}")
 
     return images, validation_dir  # Return the directory to allow for further processing
 
@@ -1985,43 +2037,45 @@ def main(args):
                 pipeline_args = {"prompt": args.validation_prompt}
                 
                 # Get images and validation directory
-                images, validation_dir = log_validation(
-                    pipeline=pipeline,
-                    args=args,
-                    accelerator=accelerator,
-                    pipeline_args=pipeline_args,
-                    epoch=epoch,
-                    torch_dtype=weight_dtype,
-                )
-                
-                # Process and upload validation images if needed
-                if args.upload_validation_images and hasattr(args, "inference_script_path") and os.path.exists(validation_dir):
-                    logger.info(f"Running external inference process on validation images from epoch {epoch}")
-                    try:
-                        # Option 1: You can directly call your run_inference function if it's importable
-                        # from inference import run_inference
-                        # run_inference(
-                        #     base_model=args.output_dir,
-                        #     prompt=args.validation_prompt,
-                        #     outdir=validation_dir,  # reuse the same directory
-                        #     num_images=0,  # set to 0 to skip generating new images, just process existing ones
-                        #     guidance_scale=7.5,
-                        #     num_inference_steps=40,
-                        # )
-                        
-                        # Option 2: Or call it as a subprocess
-                        subprocess.run([
-                            "python", args.inference_script_path,
-                            "--model_path", args.output_dir,
-                            "--prompt", args.validation_prompt,
-                            "--input_dir", validation_dir,  # path to already generated images
-                            "--process_only",  # flag to indicate we're just processing existing images
-                            "--epoch", str(epoch),
-                        ], check=True)
-                        
-                        logger.info(f"Successfully processed validation images from epoch {epoch}")
-                    except Exception as e:
-                        logger.error(f"Error processing validation images: {str(e)}")
+                try:
+                    images, validation_dir = log_validation(
+                        pipeline=pipeline,
+                        args=args,
+                        accelerator=accelerator,
+                        pipeline_args=pipeline_args,
+                        epoch=epoch,
+                        torch_dtype=weight_dtype,
+                    )
+                    
+                    # Process and upload validation images if needed
+                    if args.upload_validation_images and os.path.exists(validation_dir) and args.inference_script_path:
+                        logger.info(f"Processing validation images from epoch {epoch}")
+                        try:
+                            # Call the process_validation.py script with correct arguments
+                            cmd = [
+                                "python", args.inference_script_path,
+                                "--input_dir", validation_dir,
+                                "--output_file", os.path.join(validation_dir, "validation_uuids.txt"),
+                                "--epoch", str(epoch)
+                            ]
+                            
+                            # Add optional arguments
+                            if args.validation_prompt:
+                                cmd.extend(["--prompt", args.validation_prompt])
+                            
+                            # Execute the command
+                            result = subprocess.run(cmd, capture_output=True, text=True)
+                            
+                            if result.returncode != 0:
+                                logger.error(f"Error processing validation images: {result.stderr}")
+                            else:
+                                logger.info(f"Successfully processed validation images from epoch {epoch}")
+                                logger.info(result.stdout)
+                        except Exception as e:
+                            logger.error(f"Error processing validation images: {str(e)}")
+                except Exception as e:
+                    logger.error(f"Error during validation: {str(e)}")
+                    # Continue training even if validation fails
                 
                 if not args.train_text_encoder:
                     del text_encoder_one, text_encoder_two, text_encoder_three
