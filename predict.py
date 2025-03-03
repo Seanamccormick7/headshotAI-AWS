@@ -51,8 +51,8 @@ def run_training(
         "--mixed_precision=fp16",
         "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
-        "--learning_rate=1e-6",     #or 2e-6 if not working well
-        "--text_encoder_lr=3e-6",
+        "--learning_rate=3e-6",     #or 2e-6 if not working well
+        "--text_encoder_lr=5e-6",
         "--lr_warmup_steps=100",
         "--lr_scheduler=constant",
         "--seed=40",
