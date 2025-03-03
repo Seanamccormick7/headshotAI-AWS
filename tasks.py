@@ -100,9 +100,7 @@ def generate_images_task(self, req_data: dict):
         output_dir = os.path.join(user_model_dir, "trained_model")
         os.makedirs(output_dir, exist_ok=True)
         
-        # Create class_data_dir in the mounted volume
-        class_data_dir = os.path.join(user_model_dir, "class_images")
-        os.makedirs(class_data_dir, exist_ok=True)
+        class_data_dir = "class_images"
 
         # 6) DreamBooth training
         train_output = run_training(
