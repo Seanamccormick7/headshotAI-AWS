@@ -45,8 +45,18 @@ RUN echo '{\n\
   "use_cpu": false\n\
 }' > /root/.cache/huggingface/accelerate/default_config.yaml
 
-# Set environment variables to use our persistent directories
+# Set environment variables for HuggingFace Hub
+ENV HF_HUB_ENABLE_HF_TRANSFER=1
+ENV HF_HUB_DOWNLOAD_TIMEOUT=600
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV HF_HUB_DISABLE_PROGRESS_BARS=1
 ENV TMPDIR="/app/temp"
+
+# Pre-download the model during build (with retries)
+COPY predownload_model.py /app/
+RUN python3 /app/predownload_model.py || \
+    (sleep 30 && python3 /app/predownload_model.py) || \
+    (sleep 60 && python3 /app/predownload_model.py)
 
 # Expose port, set the entrypoint, etc. (custom to your needs)
 EXPOSE 8080
