@@ -3,10 +3,15 @@
 FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu24.04
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y git wget python3 python3-pip python3-venv unzip
+RUN apt-get update && apt-get install -y git wget python3 python3-pip python3-venv unzip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . /app
+
+# Create directories for persistent storage
+RUN mkdir -p /app/models /app/class_images /app/temp
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -39,6 +44,9 @@ RUN echo '{\n\
   "tpu_use_sudo": false,\n\
   "use_cpu": false\n\
 }' > /root/.cache/huggingface/accelerate/default_config.yaml
+
+# Set environment variables to use our persistent directories
+ENV TMPDIR="/app/temp"
 
 # Expose port, set the entrypoint, etc. (custom to your needs)
 EXPOSE 8080

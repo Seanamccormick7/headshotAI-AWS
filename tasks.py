@@ -17,6 +17,10 @@ from inference import run_inference
 pyuploadcare.conf.api_secret = os.environ.get("UPLOADCARE_SECRET_KEY", "secret")
 pyuploadcare.conf.api_public = os.environ.get("UPLOADCARE_PUBLIC_KEY", "public")
 
+# Define permanent directories for model outputs
+MODELS_DIR = '/app/models'  # This should be a mounted volume
+os.makedirs(MODELS_DIR, exist_ok=True)
+
 @celery_app.task(bind=True)
 def generate_images_task(self, req_data: dict):
     """
@@ -31,8 +35,14 @@ def generate_images_task(self, req_data: dict):
         instanceImages = req_data.get("instanceImages", [])
         callbackUrl = req_data.get("callbackUrl")
 
+        # Create a user-specific directory for output
+        user_model_dir = os.path.join(MODELS_DIR, f"user_{userId}")
+        os.makedirs(user_model_dir, exist_ok=True)
+
         # 1) Download instance images
-        instance_dir = tempfile.mkdtemp(prefix="instance_images_")
+        instance_dir = os.path.join(user_model_dir, "instance_images")
+        os.makedirs(instance_dir, exist_ok=True)
+        
         for i, uuid in enumerate(instanceImages):
             download_url = f"https://ucarecdn.com/{uuid}/-/format/jpeg/"
             out_path = os.path.join(instance_dir, f"{i}.jpg")
@@ -86,8 +96,13 @@ def generate_images_task(self, req_data: dict):
         # 4) Set training steps
         training_steps = 1200  # just to check if train-text-encoder works, will increase to 2000 in production
 
-        # 5) Create output directory
-        output_dir = tempfile.mkdtemp(prefix="trained_model_")
+        # 5) Create output directory - use the mounted volume
+        output_dir = os.path.join(user_model_dir, "trained_model")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Create class_data_dir in the mounted volume
+        class_data_dir = os.path.join(user_model_dir, "class_images")
+        os.makedirs(class_data_dir, exist_ok=True)
 
         # 6) DreamBooth training
         train_output = run_training(
@@ -97,15 +112,14 @@ def generate_images_task(self, req_data: dict):
             steps=training_steps,
             output_dir=output_dir,
             class_prompt=class_prompt,
-            class_data_dir="class_images",
-            num_class_images=50,        #can do more than are in class images file (program will just generate more) 
+            class_data_dir=class_data_dir,
+            num_class_images=50,
         )
         print("DreamBooth training output:", train_output)
         print("Instance prompt:", instance_prompt)
         print("Inference prompt:", inference_prompt)
 
         # 7) Post-training inference
-        # We'll store these final images in: e.g. output_dir + "/inference"
         inference_dir = os.path.join(output_dir, "inference_output")
         run_inference(
             base_model=output_dir,
@@ -146,8 +160,6 @@ def generate_images_task(self, req_data: dict):
         print("Error in generate_images_task:", str(e))
         raise e
     finally:
-        # Cleanup
-        if instance_dir and os.path.exists(instance_dir):
-            shutil.rmtree(instance_dir, ignore_errors=True)
-        if output_dir and os.path.exists(output_dir):
-            shutil.rmtree(output_dir, ignore_errors=True)
+        # We don't clean up the model directory anymore since it's persistent
+        # Just clean up any temporary files if needed
+        pass

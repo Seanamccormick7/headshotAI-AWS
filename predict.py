@@ -25,6 +25,17 @@ def run_training(
         # Just unzip directly, no moving subfolders
         subprocess.run(["unzip", "-o", instance_data, "-d", instance_data_dir], check=True)
 
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Set a smaller checkpoints_total_limit to save space
+    checkpoints_total_limit = 1  # Only keep the latest checkpoint
+    
+    # Clean up any existing checkpoints to save space
+    for old_checkpoint in glob.glob(os.path.join(output_dir, "checkpoint-*")):
+        print(f"Removing old checkpoint: {old_checkpoint}")
+        shutil.rmtree(old_checkpoint, ignore_errors=True)
+
     # Build the training command
     cmd = [
         "accelerate", "launch",
@@ -46,14 +57,26 @@ def run_training(
         "--lr_scheduler=constant",
         "--seed=40",
         "--report_to=tensorboard",
-        f"--max_train_steps={steps}",    #trying 800, but can increase to 1200 if possible
+        f"--max_train_steps={steps}",
         f"--output_dir={output_dir}",
         f"--instance_data_dir={instance_data_dir}",
         f"--instance_prompt={instance_prompt}",
         f"--class_data_dir={class_data_dir}",
         f"--class_prompt={class_prompt}",
         f"--num_class_images={num_class_images}",
+        f"--checkpoints_total_limit={checkpoints_total_limit}",  # Add this parameter
     ]
 
-    subprocess.run(cmd, check=True)
-    return f"Training complete. Model saved at {output_dir}/"
+    # Run the command with detailed error handling
+    try:
+        subprocess.run(cmd, check=True)
+        return f"Training complete. Model saved at {output_dir}/"
+    except subprocess.CalledProcessError as e:
+        # Check for disk space issues
+        df_output = subprocess.run(["df", "-h"], capture_output=True, text=True).stdout
+        print(f"Disk space information:\n{df_output}")
+        
+        # Raise with more context
+        error_msg = f"Training failed with exit code {e.returncode}. Check disk space."
+        print(error_msg)
+        raise RuntimeError(error_msg) from e
