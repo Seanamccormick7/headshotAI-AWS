@@ -141,12 +141,13 @@ def generate_images_task(self, req_data: dict):
             f"Professional studio headshot of the {unique_token} {age_str}{gender} with {hairColor} hair "
             f"({hairLength}), {ethnicity} ethnicity, {bodyType} build, {glasses_str}, "
             f"wearing {attire} clothing, in {backgrounds}, shot with professional lighting, "
-            f"high detail, 4k, sharp focus, DSLR, professional portrait photography, "
-            f"high-end editorial photography, trending on artstation, highly detailed"
+            f"shallow depth of field with background blur, high end photography, "
+            f"high detail, 4k, 8k, sharp focus, DSLR, professional portrait photography, "
+            f"cinematic color grading, studio lighting setup, highly detailed, DSLR"
         )
 
         # 4) Set training steps
-        training_steps = 1200  
+        training_steps = 1000  
 
         # 5) Create output directory - use the mounted volume
         output_dir = os.path.join(user_model_dir, "trained_model")
@@ -177,8 +178,8 @@ def generate_images_task(self, req_data: dict):
             prompt=inference_prompt,
             outdir=inference_dir,
             num_images=5,  # doing 5 just for testing, change to 100 in production
-            guidance_scale=7.5,
-            num_inference_steps=40,
+            guidance_scale=7,
+            num_inference_steps=50,
             torch_dtype=torch.float16,
         )
 

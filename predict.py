@@ -44,16 +44,14 @@ def run_training(
         "--train_clip_encoders_only",
         "--pretrained_model_name_or_path=stabilityai/stable-diffusion-3-medium-diffusers",
         "--with_prior_preservation",
-        "--prior_loss_weight=0.5",
+        "--prior_loss_weight=0.3",
         "--resolution=512",         #can change to 768 for better resolution
         "--train_batch_size=1",     
         "--gradient_accumulation_steps=2",      #can change to 4 if needed
         "--mixed_precision=fp16",
         "--use_8bit_adam",              #to reduce memory usage
         "--gradient_checkpointing",
-        "--learning_rate=3e-6",     #or 2e-6 if not working well
-        "--text_encoder_lr=5e-6",
-        "--lr_warmup_steps=100",
+        "--learning_rate=5e-6",     #or 2e-6 if not working well
         "--lr_scheduler=constant",
         "--seed=40",
         "--report_to=tensorboard",
