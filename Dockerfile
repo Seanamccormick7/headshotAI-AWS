@@ -50,7 +50,6 @@ ENV HF_HUB_ENABLE_HF_TRANSFER=1
 ENV HF_HUB_DOWNLOAD_TIMEOUT=600
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV HF_HUB_DISABLE_PROGRESS_BARS=1
-ENV HF_TOKEN="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"
 ENV TMPDIR="/app/temp"
 
 # IMPORTANT: This token will be passed at runtime - we're not hardcoding it
