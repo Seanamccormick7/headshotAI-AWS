@@ -6,7 +6,7 @@ This service accepts user uploads and preferences, runs model training/inference
 
 ---
 
-## 🚀 Features
+## Features
 
 - **FastAPI API layer** for handling requests (`/generate`, job status, history).
 - **Task orchestration with Celery** for long-running jobs (non-blocking API responses).
@@ -41,25 +41,21 @@ git clone git@github.com:Seanamccormick7/headshotAI-AWS.git
 cd headshotAI-AWS
 ```
 
-Create your .env file
-# .env example
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-BROKER_URL=redis://localhost:6379/0
-UPLOADCARE_PUBLIC_KEY=your_public_key
-UPLOADCARE_SECRET_KEY=your_secret_key
+---
 
-Build and run with Docker:
-docker compose up --build
+## Architecture
 
-## System Architecture
+```mermaid
 flowchart TD
-    A[Frontend Uploads & Preferences] -->|POST /generate| B[FastAPI Backend]
-    B -->|Task Enqueue| C[Celery Worker]
-    C -->|Download Files| D[Uploadcare]
-    C -->|Fine-Tune & Inference| E[DreamBooth / Stable Diffusion]
-    E -->|Upload Results| D
-    C -->|Callback Update| B
-    B -->|Persist| F[PostgreSQL]
+    A[Client: Uploads & Preferences] -->|POST /generate| B[FastAPI API]
+    B -->|enqueue| C[Celery Broker]
+    C --> D[Celery Worker (GPU)]
+    D -->|download| E[Uploadcare]
+    D -->|DreamBooth FT + SD 1.5 Inference| F[GPU Runtime]
+    D -->|upload results| E
+    D -->|callback + persist| B
+    B -->|write| G[PostgreSQL]
+    B -->|serve status| A
 
 ## Authors 
 Created by Sean McCormick and Rayden Khuraijam.
