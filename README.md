@@ -56,6 +56,7 @@ flowchart TD
     D -->|callback + persist| B
     B -->|write| G[PostgreSQL]
     B -->|serve status| A
+```
 
 ## Authors 
 Created by Sean McCormick and Rayden Khuraijam.
