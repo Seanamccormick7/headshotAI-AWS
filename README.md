@@ -332,6 +332,10 @@ Review individual component licenses before commercial deployment.
 
 Built with Hugging Face Diffusers DreamBooth implementation and Stability AI's Stable Diffusion 1.5 model.
 
+## Authors
+
+Created by Sean McCormick and Rayden Khuraijam
+
 ---
 
 **Note**: This is a production-grade implementation designed for enterprise deployments. Ensure proper resource allocation, monitoring, and compliance with applicable ML model licenses.
